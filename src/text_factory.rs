@@ -22,6 +22,7 @@ use crate::{
 
 pub struct FontsContainer
 {
+    #[allow(dead_code)]
     object_factory: Arc<Mutex<ObjectFactory>>,
     font_textures: Vec<CharsCreator>
 }
@@ -54,31 +55,6 @@ impl FontsContainer
         }).collect();
 
         Self{object_factory, font_textures}
-    }
-
-    pub fn add_fitting(&mut self, resource_uploader: &mut ResourceUploader, c: char)
-    {
-        if let Ok(all_fonts) = SystemSource::new().all_fonts()
-        {
-            let matched_font =  all_fonts.into_iter().filter_map(|font|
-            {
-                font.load().ok()
-            }).find(|font|
-            {
-                font.glyph_for_char(c).is_some()
-            });
-
-            if let Some(font) = matched_font
-            {
-                let chars_creator = CharsCreator::new(
-                    resource_uploader,
-                    self.object_factory.clone(),
-                    font
-                );
-
-                self.font_textures.push(chars_creator);
-            }
-        }
     }
 
     pub fn len(&self) -> usize

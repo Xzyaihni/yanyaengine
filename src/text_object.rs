@@ -55,14 +55,11 @@ impl<'a> FontsPicker<'a>
         self.font_textures.get_mut(self.current)
     }
 
-    pub fn cycle_next(&mut self, resource_uploader: &mut ResourceUploader, c: char)
+    pub fn cycle_next(&mut self, _resource_uploader: &mut ResourceUploader, _c: char)
     {
         self.current += 1;
 
-        if self.current == self.font_textures.len()
-        {
-            self.font_textures.add_fitting(resource_uploader, c);
-        }
+        // i could do fallback fonts here but im tired
     }
 
     pub fn reset_cycle(&mut self)

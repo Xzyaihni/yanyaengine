@@ -113,7 +113,7 @@ impl Object
             let vertex = projection_view * transform * vertex;
 
             ObjectVertex{position: vertex.xyz().into(), uv: *uv}
-        }).collect::<Vec<_>>().into_boxed_slice()
+        }).collect::<Box<[_]>>()
     }
 
     fn create_buffer(&mut self, projection_view: Matrix4<f32>, index: usize)
