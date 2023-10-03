@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::Mutex;
-
 use nalgebra::Matrix4;
 
 use font_kit::{
@@ -22,8 +20,6 @@ use crate::{
 
 pub struct FontsContainer
 {
-    #[allow(dead_code)]
-    object_factory: Arc<Mutex<ObjectFactory>>,
     font_textures: Vec<CharsCreator>
 }
 
@@ -31,7 +27,7 @@ impl FontsContainer
 {
     pub fn new(
         resource_uploader: &mut ResourceUploader,
-        object_factory: Arc<Mutex<ObjectFactory>>
+        object_factory: Arc<ObjectFactory>
     ) -> Self
     {
         let default_font = SystemSource::new()
@@ -45,7 +41,7 @@ impl FontsContainer
 
     fn from_fonts(
         resource_uploader: &mut ResourceUploader,
-        object_factory: Arc<Mutex<ObjectFactory>>,
+        object_factory: Arc<ObjectFactory>,
         fonts: impl Iterator<Item=Font>
     ) -> Self
     {
@@ -54,7 +50,7 @@ impl FontsContainer
             CharsCreator::new(resource_uploader, object_factory.clone(), font)
         }).collect();
 
-        Self{object_factory, font_textures}
+        Self{font_textures}
     }
 
     pub fn len(&self) -> usize

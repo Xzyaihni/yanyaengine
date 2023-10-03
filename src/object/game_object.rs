@@ -27,7 +27,7 @@ pub struct ObjectCreatePartialInfo<'a>
 {
     pub builder_wrapper: BuilderWrapper<'a>,
     pub assets: Arc<Mutex<Assets>>,
-    pub object_factory: Arc<Mutex<ObjectFactory>>,
+    pub object_factory: Arc<ObjectFactory>,
     pub aspect: f32,
     pub image_index: usize
 }

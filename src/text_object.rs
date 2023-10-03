@@ -3,7 +3,7 @@ use std::{
     sync::Arc
 };
 
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 
 use nalgebra::Matrix4;
 
@@ -495,14 +495,14 @@ pub struct CharsCreator
     ascii_charmap: Arc<RwLock<Texture>>,
     non_ascii_textures: HashMap<char, Arc<RwLock<Texture>>>,
     rasterizer: CharsRasterizer,
-    object_factory: Arc<Mutex<ObjectFactory>>
+    object_factory: Arc<ObjectFactory>
 }
 
 impl CharsCreator
 {
     pub fn new(
         resource_uploader: &mut ResourceUploader,
-        object_factory: Arc<Mutex<ObjectFactory>>,
+        object_factory: Arc<ObjectFactory>,
         font: Font
     ) -> Self
     {
@@ -626,7 +626,7 @@ impl CharsCreator
             projection_view
         };
 
-        Some(self.object_factory.lock().create(object_info))    
+        Some(self.object_factory.create(object_info))    
     }
 }
 

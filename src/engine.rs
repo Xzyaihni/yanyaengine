@@ -19,7 +19,7 @@ use crate::{
 pub struct Engine
 {
     fonts_info: FontsContainer,
-    object_factory: Arc<Mutex<ObjectFactory>>,
+    object_factory: Arc<ObjectFactory>,
     assets: Arc<Mutex<Assets>>
 }
 
@@ -42,7 +42,7 @@ impl Engine
         let allocator = ObjectAllocator::new(device, frames);
 
         let object_factory = ObjectFactory::new(allocator);
-        let object_factory = Arc::new(Mutex::new(object_factory));
+        let object_factory = Arc::new(object_factory);
 
         let fonts_info = FontsContainer::new(&mut resource_uploader, object_factory.clone());
 
