@@ -46,6 +46,8 @@ pub use text_factory::TextInfo;
 
 pub use nalgebra::Vector3;
 
+pub use transform::TransformContainer;
+
 pub use object_factory::{ObjectFactory, ObjectInfo};
 pub use assets::*;
 
