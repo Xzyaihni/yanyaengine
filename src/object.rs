@@ -23,8 +23,8 @@ use object_allocator::ObjectAllocator;
 pub use object_transform::ObjectTransform;
 
 use game_object::*;
-use model::Model;
-use texture::Texture;
+pub use model::Model;
+pub use texture::Texture;
 
 mod object_transform;
 
