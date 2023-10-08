@@ -12,7 +12,6 @@ use vulkano::{
 use crate::{
     Assets,
     ObjectFactory,
-    ObjectAllocator,
     camera::Camera
 };
 
@@ -49,25 +48,20 @@ impl<'a> ObjectCreateInfo<'a>
     }
 }
 
-pub struct InitPartialInfo<'a>
-{
-    pub object_info: ObjectCreatePartialInfo<'a>,
-    pub object_allocator: ObjectAllocator
-}
+pub type InitPartialInfo<'a> = ObjectCreatePartialInfo<'a>;
 
 pub struct InitInfo<'a>
 {
-    pub object_info: ObjectCreateInfo<'a>,
-    pub object_allocator: ObjectAllocator
+    pub object_info: ObjectCreateInfo<'a>
 }
 
 impl<'a> InitInfo<'a>
 {
     pub fn new(partial_info: InitPartialInfo<'a>, camera: &Camera) -> Self
     {
-        let object_info = ObjectCreateInfo::new(partial_info.object_info, camera);
-
-        Self{object_info, object_allocator: partial_info.object_allocator}
+        Self{
+            object_info: ObjectCreateInfo::new(partial_info, camera)
+        }
     }
 }
 
