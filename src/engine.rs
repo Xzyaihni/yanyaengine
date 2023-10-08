@@ -19,6 +19,7 @@ use crate::{
 pub struct Engine
 {
     fonts_info: FontsContainer,
+    object_allocator: ObjectAllocator,
     object_factory: Arc<ObjectFactory>,
     assets: Arc<Mutex<Assets>>
 }
@@ -37,16 +38,17 @@ impl Engine
             assets_paths.textures.as_ref(),
             assets_paths.models.as_ref()
         );
+
         let assets = Arc::new(Mutex::new(assets));
 
         let allocator = ObjectAllocator::new(device, frames);
 
-        let object_factory = ObjectFactory::new(allocator);
+        let object_factory = ObjectFactory::new(allocator.clone());
         let object_factory = Arc::new(object_factory);
 
         let fonts_info = FontsContainer::new(&mut resource_uploader, object_factory.clone());
 
-        Self{fonts_info, object_factory, assets}
+        Self{fonts_info, object_allocator: allocator, object_factory, assets}
     }
 
     pub fn object_create_partial_info<'a>(
@@ -74,7 +76,12 @@ impl Engine
         image_index: usize
     ) -> InitPartialInfo<'a>
     {
-        self.object_create_partial_info(resource_uploader, aspect, image_index)
+        let object_allocator = self.object_allocator.clone();
+
+        InitPartialInfo{
+            object_info: self.object_create_partial_info(resource_uploader, aspect, image_index),
+            object_allocator
+        }
     }
 
     pub fn swap_pipeline(&mut self, info: &PipelineInfo)
