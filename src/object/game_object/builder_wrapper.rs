@@ -24,6 +24,11 @@ impl<'a> BuilderWrapper<'a>
         Self{resource_uploader, fonts_info}
     }
 
+    pub fn resource_uploader<'b>(&'b mut self) -> &'b mut ResourceUploader<'a>
+    {
+        &mut self.resource_uploader
+    }
+
     pub fn builder<'b>(&'b mut self) -> &'b mut CommandBuilderType
     {
         self.resource_uploader.builder
