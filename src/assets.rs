@@ -1,5 +1,6 @@
 use std::{
     fs,
+    fmt,
     collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc
@@ -233,4 +234,24 @@ impl Assets
 			texture.write().swap_pipeline(info)
 		});
 	}
+}
+
+impl fmt::Debug for Assets
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        let texture_names = self.textures.iter().map(|(key, _value)| key.to_owned())
+            .reduce(|acc, v|
+            {
+                acc + ", " + &v
+            }).unwrap_or_else(String::new);
+
+        let model_names = self.models.iter().map(|(key, _value)| key.to_owned())
+            .reduce(|acc, v|
+            {
+                acc + ", " + &v
+            }).unwrap_or_else(String::new);
+
+        write!(f, "Assets {{ textures: [{}], models: [{}] }}", texture_names, model_names)
+    }
 }
