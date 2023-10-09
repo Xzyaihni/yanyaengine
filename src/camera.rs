@@ -1,6 +1,8 @@
 use std::f32;
 
 use nalgebra::{
+    Point3,
+    Vector3,
     geometry::Orthographic3,
     Matrix4
 };
@@ -66,7 +68,29 @@ impl Camera
         self.regenerate_projection_view();
     }
 
-    pub fn regenerate_projection_view(&mut self)
+    pub fn update(&mut self)
+    {
+        self.view.update();
+
+        self.regenerate_projection_view();
+    }
+
+    pub fn position(&self) -> &Point3<f32>
+    {
+        self.view.position()
+    }
+
+    pub fn set_position(&mut self, position: Point3<f32>)
+    {
+        self.view.set_position(position);
+    }
+
+    pub fn translate(&mut self, translation: Vector3<f32>)
+    {
+        self.view.translate(translation);
+    }
+
+    fn regenerate_projection_view(&mut self)
     {
         self.projection_view =
             Self::create_projection_view(self.projection, self.view.matrix());
