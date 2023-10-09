@@ -165,12 +165,18 @@ impl Assets
 
     pub fn texture(&self, name: &str) -> Arc<RwLock<Texture>>
     {
-        self.textures[name].clone()
+        self.textures.get(name).unwrap_or_else(||
+        {
+            panic!("no texture named '{}' found", name)
+        }).clone()
     }
 
     pub fn model(&self, name: &str) -> Arc<RwLock<Model>>
     {
-        self.models[name].clone()
+        self.models.get(name).unwrap_or_else(||
+        {
+            panic!("no model named '{}' found", name)
+        }).clone()
     }
 
     pub fn add_textures<T>(&mut self, textures: T)
