@@ -65,16 +65,13 @@ impl FilesLoader
 
     pub fn load(folder_path: impl AsRef<Path>) -> impl Iterator<Item=NamedValue<PathBuf>>
     {
-		Self::recursive_dir(folder_path.as_ref()).into_iter().map(|name|
+		Self::recursive_dir(folder_path.as_ref()).into_iter().map(move |name|
 		{
             let value = name.clone();
 
-			let short_path = name.iter().skip(1).fold(PathBuf::new(), |mut acc, part|
-			{
-				acc.push(part);
-
-				acc
-			}).into_os_string().into_string().unwrap();
+			let short_path = name.strip_prefix(folder_path.as_ref())
+                .expect("all paths must be in parent folder")
+                .to_string_lossy().into_owned();
 
             NamedValue{name: short_path, value}
 		})
