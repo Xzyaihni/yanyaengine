@@ -85,9 +85,29 @@ impl Camera
         self.view.set_position(position);
     }
 
+    pub fn set_position_x(&mut self, position: f32)
+    {
+        self.view.set_position_x(position);
+    }
+
+    pub fn set_position_y(&mut self, position: f32)
+    {
+        self.view.set_position_y(position);
+    }
+
+    pub fn set_position_z(&mut self, position: f32)
+    {
+        self.view.set_position_z(position);
+    }
+
     pub fn translate(&mut self, translation: Vector3<f32>)
     {
         self.view.translate(translation);
+    }
+
+    pub fn translate_to(&mut self, other: &Point3<f32>, amount: f32)
+    {
+        self.view.translate_to(other, amount);
     }
 
     fn regenerate_projection_view(&mut self)

@@ -74,9 +74,30 @@ impl CameraTransform
         self.position = position;
     }
 
+    pub fn set_position_x(&mut self, position: f32)
+    {
+        self.position.x = position;
+    }
+
+    pub fn set_position_y(&mut self, position: f32)
+    {
+        self.position.y = position;
+    }
+
+    pub fn set_position_z(&mut self, position: f32)
+    {
+        self.position.z = position;
+    }
+
     pub fn translate(&mut self, translation: Vector3<f32>)
     {
         self.position += translation;
+    }
+
+    pub fn translate_to(&mut self, other: &Point3<f32>, amount: f32)
+    {
+        // why cant i use the lerp method on OPoint?????
+        self.position.coords = self.position.coords.lerp(&other.coords, amount);
     }
 
     pub fn update(&mut self)
