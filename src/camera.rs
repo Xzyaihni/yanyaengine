@@ -105,7 +105,7 @@ impl Camera
         self.view.translate(translation);
     }
 
-    pub fn translate_to(&mut self, other: &Point3<f32>, amount: f32)
+    pub fn translate_to(&mut self, other: &Vector3<f32>, amount: f32)
     {
         self.view.translate_to(other, amount);
     }
