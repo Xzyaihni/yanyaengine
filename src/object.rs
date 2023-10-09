@@ -63,7 +63,6 @@ pub struct Object
 impl Object
 {
     pub fn new_default(
-        projection_view: Matrix4<f32>,
         model: Arc<RwLock<Model>>,
         texture: Arc<RwLock<Texture>>,
         allocator: &ObjectAllocator
@@ -71,11 +70,10 @@ impl Object
     {
         let transform = ObjectTransform::new_default();
 
-        Self::new(projection_view, model, texture, transform, allocator)
+        Self::new(model, texture, transform, allocator)
     }
 
     pub fn new(
-        projection_view: Matrix4<f32>,
         model: Arc<RwLock<Model>>,
         texture: Arc<RwLock<Texture>>,
         transform: ObjectTransform,
@@ -93,7 +91,7 @@ impl Object
 
         (0..allocator.subbuffers_amount()).for_each(|index|
         {
-            this.create_buffer(projection_view, index);
+            this.create_buffer(index);
         });
 
         this
@@ -116,9 +114,9 @@ impl Object
         }).collect::<Box<[_]>>()
     }
 
-    fn create_buffer(&mut self, projection_view: Matrix4<f32>, index: usize)
+    fn create_buffer(&mut self, index: usize)
     {
-        let vertices = self.calculate_vertices(projection_view);
+        let vertices = self.calculate_vertices(Matrix4::zeros());
 
         self.subbuffers[index].write().unwrap().copy_from_slice(&vertices);
     }

@@ -5,8 +5,6 @@ use std::{
 
 use parking_lot::RwLock;
 
-use nalgebra::Matrix4;
-
 use font_kit::{
     hinting::HintingOptions,
     font::Font,
@@ -193,7 +191,6 @@ impl TextObject
                 current_font,
                 &mut bounds_calculator,
                 &mut transform,
-                info.projection_view,
                 c
             );
 
@@ -238,7 +235,6 @@ impl TextObject
         font_texture: &mut CharsCreator,
         bounds_calculator: &mut BoundsCalculator,
         original_transform: &mut Transform,
-        projection_view: Matrix4<f32>,
         c: char
     ) -> Option<Object>
     {
@@ -251,7 +247,6 @@ impl TextObject
         let object = font_texture.create_char(
             resource_uploader,
             transform,
-            projection_view,
             c
         )?;
 
@@ -613,7 +608,6 @@ impl CharsCreator
         &mut self,
         resource_uploader: &mut ResourceUploader,
         transform: Transform,
-        projection_view: Matrix4<f32>,
         c: char
     ) -> Option<Object>
     {
@@ -622,8 +616,7 @@ impl CharsCreator
         let object_info = ObjectInfo{
             model,
             texture,
-            transform,
-            projection_view
+            transform
         };
 
         Some(self.object_factory.create(object_info))    

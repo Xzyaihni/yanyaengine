@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use nalgebra::Matrix4;
-
 use parking_lot::RwLock;
 
 use super::{
@@ -21,8 +19,7 @@ pub struct ObjectInfo
 {
     pub model: Arc<RwLock<Model>>,
     pub texture: Arc<RwLock<Texture>>,
-    pub transform: Transform,
-    pub projection_view: Matrix4<f32>
+    pub transform: Transform
 }
 
 #[derive(Debug)]
@@ -43,7 +40,6 @@ impl ObjectFactory
 		let object_transform = ObjectTransform::new_transformed(info.transform);
 
 		Object::new(
-            info.projection_view,
 			info.model,
 			info.texture,
 			object_transform,
