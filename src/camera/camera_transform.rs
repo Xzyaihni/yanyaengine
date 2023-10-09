@@ -22,6 +22,7 @@ impl Default for CameraTransformConfig
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CameraTransform
 {
@@ -63,6 +64,11 @@ impl CameraTransform
         forward.cross(right).normalize()
     }
 
+    pub fn position(&self) -> &Point3<f32>
+    {
+        &self.position
+    }
+
     pub fn set_position(&mut self, position: Point3<f32>)
     {
         self.position = position;
@@ -73,11 +79,8 @@ impl CameraTransform
         self.position += translation;
     }
 
-    pub fn recalculate_matrix(&mut self)
+    pub fn update(&mut self)
     {
-        self.right = Self::calculate_right(&self.forward);
-        self.up = Self::calculate_up(&self.forward, &self.right);
-
         self.matrix = Self::calculate_matrix(&self.position, &self.forward, &self.up);
     }
 
