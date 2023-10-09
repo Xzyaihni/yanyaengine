@@ -7,8 +7,6 @@ use nalgebra::{
 
 use camera_transform::CameraTransform;
 
-use crate::transform::{Transform, OnTransformCallback, TransformContainer};
-
 mod camera_transform;
 
 
@@ -28,7 +26,7 @@ impl Camera
         let size = Self::aspect_size(aspect);
         let projection = Self::create_projection(size);
 
-        let view = CameraTransform::new_transformed(Transform::new());
+        let view = CameraTransform::new(Default::default());
 
         let projection_view = Self::create_projection_view(projection, view.matrix());
 
@@ -108,27 +106,5 @@ impl Camera
         let normalized = (self.size.0 / lowest, self.size.1 / lowest);
 
         normalized
-    }
-}
-
-impl OnTransformCallback for Camera
-{
-    fn callback(&mut self)
-    {
-        self.view.callback();
-        self.regenerate_projection_view();
-    }
-}
-
-impl TransformContainer for Camera
-{
-    fn transform_ref(&self) -> &Transform
-    {
-        self.view.transform_ref()
-    }
-
-    fn transform_mut(&mut self) -> &mut Transform
-    {
-        self.view.transform_mut()
     }
 }
