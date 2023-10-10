@@ -113,7 +113,7 @@ impl CameraTransform
     {
         let target = *position + forward;
 
-        Matrix4::look_at_rh(position, &target, up)
+        Matrix4::look_at_lh(position, &target, up)
     }
 
     pub fn matrix(&self) -> Matrix4<f32>
