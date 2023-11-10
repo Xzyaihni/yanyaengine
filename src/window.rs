@@ -5,7 +5,6 @@ use std::{
 
 use vulkano::{
     format::Format,
-    shader::EntryPoint,
     memory::allocator::StandardMemoryAllocator,
     descriptor_set::allocator::StandardDescriptorSetAllocator,
 	sampler::{
@@ -89,6 +88,7 @@ use crate::{
     AppOptions,
     Control,
     PipelineInfo,
+    ShadersInfo,
     engine::Engine,
     game_object::*,
     object::{
@@ -96,24 +96,6 @@ use crate::{
         resource_uploader::ResourceUploader
     }
 };
-
-mod default_vertex
-{
-    vulkano_shaders::shader!
-    {
-        ty: "vertex",
-        path: "shaders/default.vert"
-    }
-}
-
-mod default_fragment
-{
-    vulkano_shaders::shader!
-    {
-        ty: "fragment",
-        path: "shaders/default.frag"
-    }
-}
 
 
 pub fn framebuffers(
@@ -134,49 +116,6 @@ pub fn framebuffers(
     }).collect::<Vec<_>>()
 }
 
-pub fn generate_pipeline(
-    vertex_entry: EntryPoint,
-    fragment_entry: EntryPoint,
-    viewport: Viewport,
-    subpass: Subpass,
-    device: Arc<Device>
-) -> Arc<GraphicsPipeline>
-{
-    GraphicsPipeline::start()
-        .vertex_input_state(ObjectVertex::per_vertex())
-        .vertex_shader(vertex_entry, ())
-        .input_assembly_state(InputAssemblyState::new())
-        .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([viewport]))
-        .fragment_shader(fragment_entry, ())
-        .color_blend_state(ColorBlendState::new(subpass.num_color_attachments()).blend_alpha())
-        .rasterization_state(RasterizationState{
-            cull_mode: StateMode::Fixed(CullMode::Back),
-            ..Default::default()
-        })
-        .render_pass(subpass)
-        .build(device)
-        .unwrap()
-}
-
-pub fn generate_pipelines(
-    viewport: Viewport,
-    render_pass: Arc<RenderPass>,
-    device: Arc<Device>
-) -> Vec<Arc<GraphicsPipeline>>
-{
-    let subpass = Subpass::from(render_pass, 0).unwrap();
-
-    vec![
-        generate_pipeline(
-            default_vertex::load(device.clone()).unwrap().entry_point("main").unwrap(),
-            default_fragment::load(device.clone()).unwrap().entry_point("main").unwrap(),
-            viewport,
-            subpass,
-            device
-        )
-    ]
-}
-
 pub fn default_builder(
     allocator: &StandardCommandBufferAllocator,
     queue_family_index: u32
@@ -189,18 +128,24 @@ pub fn default_builder(
     ).unwrap()
 }
 
+struct PipelineInfoRaw
+{
+    pipeline: Arc<GraphicsPipeline>,
+    layout: Arc<PipelineLayout>
+}
+
 // just put everything in 1 place who cares lmao
 struct RenderInfo
 {
     pub device: Arc<Device>,
     pub swapchain: Arc<Swapchain>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
-    pub pipelines: Vec<Arc<GraphicsPipeline>>,
+    pub pipelines: Vec<PipelineInfoRaw>,
     pub viewport: Viewport,
     pub surface: Arc<Surface>,
     pub render_pass: Arc<RenderPass>,
     pub sampler: Arc<Sampler>,
-    pub layout: Arc<PipelineLayout>,
+    shaders: Vec<ShadersInfo>,
     pub descriptor_set_allocator: StandardDescriptorSetAllocator,
     pub memory_allocator: StandardMemoryAllocator
 }
@@ -210,6 +155,7 @@ impl RenderInfo
     pub fn new(
         device: Arc<Device>,
         surface: Arc<Surface>,
+        shaders: Vec<ShadersInfo>,
         capabilities: SurfaceCapabilities,
         image_format: Format,
         composite_alpha: CompositeAlpha
@@ -274,9 +220,12 @@ impl RenderInfo
         };
 
 
-        let pipelines = generate_pipelines(viewport.clone(), render_pass.clone(), device.clone());
-
-        let layout = pipelines[0].layout().clone();
+        let pipelines = Self::generate_pipelines(
+            viewport.clone(),
+            render_pass.clone(),
+            device.clone(),
+            &shaders
+        );
 
         Self{
             device,
@@ -286,31 +235,80 @@ impl RenderInfo
             viewport,
             surface,
             render_pass,
-            layout,
             sampler,
+            shaders,
             descriptor_set_allocator,
             memory_allocator
         }
     }
 
-    pub fn pipeline_info(&self) -> PipelineInfo
+    fn generate_pipeline(
+        shader: &ShadersInfo,
+        viewport: Viewport,
+        subpass: Subpass,
+        device: Arc<Device>
+    ) -> PipelineInfoRaw
+    {
+        let pipeline = GraphicsPipeline::start()
+            .vertex_input_state(ObjectVertex::per_vertex())
+            .vertex_shader(shader.vertex_entry(), ())
+            .input_assembly_state(InputAssemblyState::new())
+            .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([viewport]))
+            .fragment_shader(shader.fragment_entry(), ())
+            .color_blend_state(ColorBlendState::new(subpass.num_color_attachments()).blend_alpha())
+            .rasterization_state(RasterizationState{
+                cull_mode: StateMode::Fixed(CullMode::Back),
+                ..Default::default()
+            })
+            .render_pass(subpass)
+            .build(device)
+            .unwrap();
+
+        PipelineInfoRaw{
+            layout: pipeline.layout().clone(),
+            pipeline
+        }
+    }
+
+    fn generate_pipelines(
+        viewport: Viewport,
+        render_pass: Arc<RenderPass>,
+        device: Arc<Device>,
+        shaders: &[ShadersInfo]
+    ) -> Vec<PipelineInfoRaw>
+    {
+        let subpass = Subpass::from(render_pass, 0).unwrap();
+
+        shaders.iter().map(|shader|
+        {
+            Self::generate_pipeline(
+                shader,
+                viewport.clone(),
+                subpass.clone(),
+                device.clone()
+            )
+        }).collect()
+    }
+
+    pub fn pipeline_info(&self, index: usize) -> PipelineInfo
     {
         PipelineInfo::new(
             &self.descriptor_set_allocator,
             self.sampler.clone(),
-            self.layout.clone()
+            self.pipelines[index].layout.clone()
         )
     }
 
     pub fn resource_uploader<'a>(
         &'a self,
-        builder: &'a mut CommandBuilderType
+        builder: &'a mut CommandBuilderType,
+        index: usize
     ) -> ResourceUploader<'a>
     {
         ResourceUploader{
             allocator: &self.memory_allocator,
             builder,
-            pipeline_info: self.pipeline_info()
+            pipeline_info: self.pipeline_info(index)
         }
     }
 
@@ -333,10 +331,11 @@ impl RenderInfo
         {
             self.viewport.dimensions = dimensions.into();
 
-            self.pipelines = generate_pipelines(
+            self.pipelines = Self::generate_pipelines(
                 self.viewport.clone(),
                 self.render_pass.clone(),
-                self.device.clone()
+                self.device.clone(),
+                &self.shaders
             );
         }
 
@@ -369,13 +368,23 @@ pub struct GraphicsInfo
     pub event_loop: EventLoop<()>,
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
+    pub shaders: Vec<ShadersInfo>,
     pub queues: Vec<Arc<Queue>>
 }
 
 pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 {
-    let capabilities = info.physical_device
-        .surface_capabilities(&info.surface, Default::default())
+    let GraphicsInfo{
+        surface,
+        event_loop,
+        physical_device,
+        device,
+        shaders,
+        queues
+    } = info;
+
+    let capabilities = physical_device
+        .surface_capabilities(&surface, Default::default())
         .unwrap();
 
     let composite_alpha =
@@ -394,19 +403,19 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
         }
     };
 
-    let image_format = info.physical_device
-        .surface_formats(&info.surface, Default::default())
+    let image_format = physical_device
+        .surface_formats(&surface, Default::default())
         .unwrap()[0].0;
 
     let mut render_info = RenderInfo::new(
-        info.device.clone(), info.surface.clone(),
+        device.clone(), surface.clone(), shaders,
         capabilities, image_format, composite_alpha
     );
 
     let command_allocator =
-        StandardCommandBufferAllocator::new(info.device.clone(), Default::default());
+        StandardCommandBufferAllocator::new(device.clone(), Default::default());
 
-    let queue = info.queues[0].clone();
+    let queue = queues[0].clone();
 
     let fences_amount = render_info.framebuffers.len();
     let mut fences = vec![None; fences_amount].into_boxed_slice();
@@ -422,7 +431,10 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 
     let mut initialized = false;
 
-    info.event_loop.run(move |event, _, control_flow|
+    // ill change this later wutever
+    let pipeline_index = 0;
+
+    event_loop.run(move |event, _, control_flow|
     {
         match event
         {
@@ -527,8 +539,8 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 
                         engine = Some(Engine::new(
                             &options.assets_paths,
-                            render_info.resource_uploader(&mut builder),
-                            info.device.clone(),
+                            render_info.resource_uploader(&mut builder, pipeline_index),
+                            device.clone(),
                             fences_amount
                         ));
 
@@ -539,7 +551,7 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
                                 .as_mut()
                                 .unwrap()
                                 .init_partial_info(
-                                    render_info.resource_uploader(&mut builder),
+                                    render_info.resource_uploader(&mut builder, pipeline_index),
                                     aspect,
                                     image_index
                                 );
@@ -553,7 +565,7 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
                         engine: engine.as_mut().unwrap(),
                         builder,
                         image_index,
-                        layout: render_info.layout.clone(),
+                        layout: render_info.pipelines[pipeline_index].layout.clone(),
                         render_info: &mut render_info,
                         previous_time: &mut previous_time
                     };
@@ -566,7 +578,7 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 
                     recreate_swapchain |= suboptimal;
                     recreate_swapchain |= execute_builder(
-                        info.device.clone(),
+                        device.clone(),
                         queue.clone(),
                         render_info.swapchain.clone(),
                         &mut fences,
@@ -596,7 +608,7 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 
                     if initialized
                     {
-                        let swap_pipeline = render_info.pipeline_info();
+                        let swap_pipeline = render_info.pipeline_info(pipeline_index);
 
                         engine.as_mut().unwrap().swap_pipeline(&swap_pipeline);
                         user_app.as_mut().unwrap().swap_pipeline(swap_pipeline);
@@ -648,11 +660,14 @@ fn run_frame<UserApp: YanyaApp>(
 
     user_app.update(delta_time);
 
+    // and ill change this one later too
+    let pipeline_index = 0;
+
     let aspect = frame_info.render_info.aspect();
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
-                frame_info.render_info.resource_uploader(&mut frame_info.builder),
+                frame_info.render_info.resource_uploader(&mut frame_info.builder, pipeline_index),
                 aspect,
                 frame_info.image_index
             );
@@ -668,12 +683,14 @@ fn run_frame<UserApp: YanyaApp>(
             )
         },
         SubpassContents::Inline
-    ).unwrap().bind_pipeline_graphics(frame_info.render_info.pipelines[0].clone());
+    ).unwrap().bind_pipeline_graphics(
+        frame_info.render_info.pipelines[pipeline_index].pipeline.clone()
+    );
 
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
-                frame_info.render_info.resource_uploader(&mut frame_info.builder),
+                frame_info.render_info.resource_uploader(&mut frame_info.builder, pipeline_index),
                 aspect,
                 frame_info.image_index
             );

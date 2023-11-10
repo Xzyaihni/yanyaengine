@@ -8,6 +8,7 @@ use vulkano::{
     VulkanLibrary,
     format::ClearValue,
     swapchain::Surface,
+    shader::{EntryPoint, ShaderModule, ShaderCreationError},
     device::{
         Device,
         DeviceCreateInfo,
@@ -72,6 +73,24 @@ pub mod text_object;
 mod window;
 
 
+mod default_vertex
+{
+    vulkano_shaders::shader!
+    {
+        ty: "vertex",
+        path: "shaders/default.vert"
+    }
+}
+
+mod default_fragment
+{
+    vulkano_shaders::shader!
+    {
+        ty: "fragment",
+        path: "shaders/default.frag"
+    }
+}
+
 pub trait YanyaApp
 where
     Self: Sized
@@ -127,10 +146,69 @@ impl Default for AssetsPaths
     }
 }
 
+#[derive(Clone)]
+pub struct ShadersInfo<T=Arc<ShaderModule>>
+{
+    vertex: T,
+    fragment: T
+}
+
+impl<T> ShadersInfo<T>
+{
+    pub fn new(vertex: T, fragment: T) -> Self
+    {
+        Self{vertex, fragment}
+    }
+
+    pub fn map<F, U>(self, mut f: F) -> ShadersInfo<U>
+    where
+        F: FnMut(T) -> U
+    {
+        ShadersInfo{
+            vertex: f(self.vertex),
+            fragment: f(self.fragment)
+        }
+    }
+}
+
+impl ShadersInfo
+{
+    pub fn vertex_entry(&self) -> EntryPoint
+    {
+        self.vertex.entry_point("main").unwrap()
+    }
+
+    pub fn fragment_entry(&self) -> EntryPoint
+    {
+        self.fragment.entry_point("main").unwrap()
+    }
+}
+
+type ShaderFunc = Box<dyn FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, ShaderCreationError>>;
+
+pub struct ShaderItem
+{
+    func: ShaderFunc
+}
+
+impl ShaderItem
+{
+    pub fn new(func: ShaderFunc) -> Self
+    {
+        Self{func: func.into()}
+    }
+
+    fn load(self, device: Arc<Device>) -> Arc<ShaderModule>
+    {
+        (self.func)(device).unwrap()
+    }
+}
+
 pub struct AppBuilder<UserApp>
 {
     instance: Arc<Instance>,
     surface: WindowBuilder,
+    shaders: Vec<ShadersInfo<ShaderItem>>,
     options: AppOptions,
     _user_app: PhantomData<UserApp>
 }
@@ -177,51 +255,26 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         self
     }
 
-    pub fn run(self)
+    pub fn with_shaders<V>(mut self, shaders: V) -> Self
+    where
+        V: Into<Vec<ShadersInfo<ShaderItem>>>
     {
-        let app = App::<UserApp>{
-            instance: self.instance,
-            surface: self.surface,
-            options: self.options,
-            _user_app: PhantomData
-        };
+        self.shaders = shaders.into();
 
-        app.run()
-    }
-}
-
-pub struct App<UserApp>
-{
-    instance: Arc<Instance>,
-    surface: WindowBuilder,
-    options: AppOptions,
-    _user_app: PhantomData<UserApp>
-}
-
-impl<UserApp: YanyaApp + 'static> App<UserApp>
-{
-    pub fn new() -> AppBuilder<UserApp>
-    {
-        let library = VulkanLibrary::new().expect("nyo vulkan? ;-;");
-
-        let enabled_extensions = vulkano_win::required_extensions(&library);
-        let instance = Instance::new(
-            library,
-            InstanceCreateInfo{
-                enabled_extensions,
-                ..Default::default()
-            }
-        ).expect("cant create vulkan instance..");
-
-        let surface = WindowBuilder::new();
-
-        let options = AppOptions::default();
-
-        AppBuilder{instance, surface, options, _user_app: PhantomData}
+        self
     }
 
-    pub fn run(self)
+    pub fn run(mut self)
     {
+        if self.shaders.is_empty()
+        {
+            // load default shaders
+            self.shaders = vec![ShadersInfo::new(
+                ShaderItem::new(Box::new(|device| default_vertex::load(device))),
+                ShaderItem::new(Box::new(|device| default_fragment::load(device)))
+            )];
+        }
+
         let event_loop = EventLoop::new();
         event_loop.set_device_event_filter(DeviceEventFilter::Unfocused);
 
@@ -230,11 +283,17 @@ impl<UserApp: YanyaApp + 'static> App<UserApp>
         let (physical_device, (device, queues)) =
             Self::create_device(surface.clone(), self.instance);
 
+        let shaders = self.shaders.into_iter().map(|shader_item|
+        {
+            shader_item.map(|shader| shader.load(device.clone()))
+        }).collect();
+
         let graphics_info = GraphicsInfo{
             surface,
             event_loop,
             physical_device,
             device,
+            shaders,
             queues: queues.collect()
         };
 
@@ -299,5 +358,39 @@ impl<UserApp: YanyaApp + 'static> App<UserApp>
                 enabled_extensions: device_extensions,
                 ..Default::default()
             }).expect("couldnt create device...."))
+    }
+}
+
+pub struct App<UserApp>
+{
+    _user_app: PhantomData<UserApp>
+}
+
+impl<UserApp: YanyaApp + 'static> App<UserApp>
+{
+    pub fn new() -> AppBuilder<UserApp>
+    {
+        let library = VulkanLibrary::new().expect("nyo vulkan? ;-;");
+
+        let enabled_extensions = vulkano_win::required_extensions(&library);
+        let instance = Instance::new(
+            library,
+            InstanceCreateInfo{
+                enabled_extensions,
+                ..Default::default()
+            }
+        ).expect("cant create vulkan instance..");
+
+        let surface = WindowBuilder::new();
+
+        let options = AppOptions::default();
+
+        AppBuilder{
+            instance,
+            surface,
+            shaders: Vec::new(),
+            options,
+            _user_app: PhantomData
+        }
     }
 }
