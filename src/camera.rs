@@ -1,4 +1,7 @@
-use std::f32;
+use std::{
+    f32,
+    ops::Range
+};
 
 use nalgebra::{
     Point3,
@@ -18,21 +21,22 @@ pub struct Camera
     projection: Matrix4<f32>,
     view: CameraTransform,
     projection_view: Matrix4<f32>,
-    size: (f32, f32)
+    size: (f32, f32),
+    z_planes: Range<f32>
 }
 
 impl Camera
 {
-    pub fn new(aspect: f32) -> Self
+    pub fn new(aspect: f32, z_planes: Range<f32>) -> Self
     {
         let size = Self::aspect_size(aspect);
-        let projection = Self::create_projection(size);
+        let projection = Self::create_projection(size, &z_planes);
 
         let view = CameraTransform::new(Default::default());
 
         let projection_view = Self::create_projection_view(projection, view.matrix());
 
-        Self{projection, view, projection_view, size}
+        Self{projection, view, projection_view, size, z_planes}
     }
 
     fn aspect_size(aspect: f32) -> (f32, f32)
@@ -46,7 +50,7 @@ impl Camera
         }
     }
 
-    fn create_projection(size: (f32, f32)) -> Matrix4<f32>
+    fn create_projection(size: (f32, f32), z_planes: &Range<f32>) -> Matrix4<f32>
     {
         let identity = Matrix4::identity();
         let mut projection = Orthographic3::from_matrix_unchecked(identity);
@@ -54,7 +58,7 @@ impl Camera
         projection.set_left_and_right(-size.0 / 2.0, size.0 / 2.0);
         projection.set_bottom_and_top(-size.1 / 2.0, size.1 / 2.0);
 
-        projection.set_znear_and_zfar(-1.0, 1.0);
+        projection.set_znear_and_zfar(z_planes.start, z_planes.end);
 
         projection.to_homogeneous()
     }
@@ -63,7 +67,7 @@ impl Camera
     {
         self.size = size;
 
-        self.projection = Self::create_projection(size);
+        self.projection = Self::create_projection(self.size, &self.z_planes);
 
         self.regenerate_projection_view();
     }
