@@ -1,10 +1,13 @@
-use winit::event::{ElementState, VirtualKeyCode};
+use winit::{
+    event::{ElementState, MouseButton},
+    keyboard::PhysicalKey
+};
 
 
 #[derive(Debug)]
 pub enum Control
 {
-    Keyboard{keycode: VirtualKeyCode, state: ElementState},
-    Mouse{button: u32, state: ElementState},
+    Keyboard{keycode: PhysicalKey, state: ElementState},
+    Mouse{button: MouseButton, state: ElementState},
     Scroll{x: f64, y: f64}
 }

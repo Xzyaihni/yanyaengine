@@ -6,7 +6,7 @@ use std::{
 use parking_lot::RwLock;
 
 use vulkano::{
-    buffer::Subbuffer,
+    buffer::{BufferContents, Subbuffer},
     pipeline::{
         PipelineBindPoint,
         graphics::vertex_input::Vertex
@@ -14,8 +14,6 @@ use vulkano::{
 };
 
 use nalgebra::{Vector3, Vector4, Matrix4};
-
-use bytemuck::{Pod, Zeroable};
 
 use crate::transform::{Transform, OnTransformCallback, TransformContainer};
 
@@ -35,8 +33,8 @@ pub mod model;
 pub mod texture;
 
 
+#[derive(BufferContents, Vertex, Clone, Copy)]
 #[repr(C)]
-#[derive(Vertex, Debug, Default, Copy, Clone, Zeroable, Pod)]
 pub struct ObjectVertex
 {
     #[format(R32G32B32_SFLOAT)]
@@ -149,7 +147,9 @@ impl GameObject for Object
                 0,
                 self.texture.read().descriptor_set()
             )
+            .unwrap()
             .bind_vertex_buffers(0, self.subbuffers[info.object_info.image_index].clone())
+            .unwrap()
             .draw(size, 1, 0, 0)
             .unwrap();
     }

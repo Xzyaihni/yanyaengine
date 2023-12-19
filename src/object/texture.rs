@@ -7,10 +7,14 @@ use std::{
 
 use vulkano::{
     format::Format,
+    buffer::{Buffer, BufferUsage, BufferCreateInfo},
+    command_buffer::CopyBufferToImageInfo,
+    memory::allocator::{MemoryTypeFilter, AllocationCreateInfo},
     image::{
-        MipmapsCount,
-        ImmutableImage,
-        ImageDimensions,
+        Image,
+        ImageType,
+        ImageUsage,
+        ImageCreateInfo,
         view::ImageView
     },
     descriptor_set::{
@@ -186,7 +190,7 @@ impl fmt::Debug for RgbaImage
 pub struct Texture
 {
     image: RgbaImage,
-    view: Arc<ImageView<ImmutableImage>>,
+    view: Arc<ImageView>,
     descriptor_set: Arc<PersistentDescriptorSet>
 }
 
@@ -209,20 +213,37 @@ impl Texture
     fn calculate_descriptor_set(
         resource_uploader: &mut ResourceUploader,
         image: &RgbaImage
-    ) -> Arc<ImageView<ImmutableImage>>
+    ) -> Arc<ImageView>
     {
-        let image = ImmutableImage::from_iter(
-            resource_uploader.allocator,
-            image.data.iter().cloned(),
-            ImageDimensions::Dim2d{
-                width: image.width,
-                height: image.height,
-                array_layers: 1
+        let buffer = Buffer::from_iter(
+            resource_uploader.allocator.clone(),
+            BufferCreateInfo{
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
             },
-            MipmapsCount::Log2,
-            Format::R8G8B8A8_SRGB,
-            resource_uploader.builder
+            AllocationCreateInfo{
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            image.data.iter().copied()
         ).unwrap();
+
+        let image = Image::new(
+            resource_uploader.allocator.clone(),
+            ImageCreateInfo{
+                image_type: ImageType::Dim2d,
+                format: Format::R8G8B8A8_SRGB,
+                extent: [image.width, image.height, 1],
+                usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default()
+        ).unwrap();
+
+        resource_uploader.builder
+            .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))
+            .unwrap();
 
         ImageView::new_default(image).unwrap()
     }
@@ -233,10 +254,11 @@ impl Texture
     }
 
     fn calculate_persistent_set(
-        view: Arc<ImageView<ImmutableImage>>,
+        view: Arc<ImageView>,
         info: &PipelineInfo
     ) -> Arc<PersistentDescriptorSet>
     {
+        // TODO change this when im gonna add support for multiple shaders
         PersistentDescriptorSet::new(
             info.allocator,
             info.layout.clone(),
@@ -244,7 +266,8 @@ impl Texture
                 WriteDescriptorSet::image_view_sampler(
                     0, view, info.sampler.clone()
                 )
-            ]
+            ],
+            []
         ).unwrap()
     }
 

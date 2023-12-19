@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vulkano::{
     pipeline::PipelineLayout,
 	memory::allocator::StandardMemoryAllocator,
-	sampler::Sampler,
+	image::sampler::Sampler,
 	descriptor_set::{
 		allocator::StandardDescriptorSetAllocator,
 		layout::DescriptorSetLayout
@@ -50,7 +50,7 @@ impl<'a> Clone for PipelineInfo<'a>
 
 pub struct ResourceUploader<'a>
 {
-	pub allocator: &'a StandardMemoryAllocator,
+	pub allocator: Arc<StandardMemoryAllocator>,
 	pub builder: &'a mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
 	pub pipeline_info: PipelineInfo<'a>
 }

@@ -4,16 +4,13 @@ use std::{
 };
 
 use vulkano::{
+    Validated,
+    VulkanError,
     format::Format,
     memory::allocator::StandardMemoryAllocator,
     descriptor_set::allocator::StandardDescriptorSetAllocator,
-	sampler::{
-        Filter,
-        Sampler,
-        SamplerCreateInfo
-    },
+    shader::EntryPoint,
     sync::{
-        FlushError,
         GpuFuture,
         future::{JoinFuture, FenceSignalFuture}
     },
@@ -21,23 +18,30 @@ use vulkano::{
         Pipeline,
         PipelineLayout,
         GraphicsPipeline,
-        StateMode,
+        PipelineShaderStageCreateInfo,
         graphics::{
-            color_blend::ColorBlendState,
+            GraphicsPipelineCreateInfo,
+            multisample::MultisampleState,
+            color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
-            vertex_input::Vertex,
+            vertex_input::{VertexDefinition, Vertex},
             viewport::{Viewport, ViewportState}
         }
     },
     image::{
         ImageUsage,
-        SwapchainImage,
-        view::ImageView
+        Image,
+        SampleCount,
+        view::ImageView,
+        sampler::{
+            Filter,
+            Sampler,
+            SamplerCreateInfo
+        }
     },
     swapchain::{
         self,
-        AcquireError,
         Surface,
         SurfaceCapabilities,
         CompositeAlpha,
@@ -45,7 +49,6 @@ use vulkano::{
         Swapchain,
         SwapchainAcquireFuture,
         SwapchainCreateInfo,
-        SwapchainCreationError,
         SwapchainPresentInfo
     },
     device::{
@@ -65,6 +68,7 @@ use vulkano::{
         CommandBufferExecFuture,
         CommandBufferUsage,
         SubpassContents,
+        SubpassBeginInfo,
         RenderPassBeginInfo,
         allocator::StandardCommandBufferAllocator
     }
@@ -76,11 +80,9 @@ use winit::{
     event::{
         Event,
         WindowEvent,
-        DeviceEvent,
-        KeyboardInput,
         MouseScrollDelta
     },
-    event_loop::{ControlFlow, EventLoop}
+    event_loop::{EventLoop, EventLoopWindowTarget}
 };
 
 use crate::{
@@ -98,40 +100,40 @@ use crate::{
 };
 
 
-pub fn framebuffers(
-    images: impl Iterator<Item=Arc<SwapchainImage>>,
-    render_pass: Arc<RenderPass>
-) -> Vec<Arc<Framebuffer>>
-{
-    images.map(|image|
-    {
-        let view = ImageView::new_default(image).unwrap();
-        Framebuffer::new(
-            render_pass.clone(),
-            FramebufferCreateInfo{
-                attachments: vec![view],
-                ..Default::default()
-            }
-        ).unwrap()
-    }).collect::<Vec<_>>()
-}
-
-pub fn default_builder(
-    allocator: &StandardCommandBufferAllocator,
-    queue_family_index: u32
-) -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>
-{
-    AutoCommandBufferBuilder::primary(
-        allocator,
-        queue_family_index,
-        CommandBufferUsage::OneTimeSubmit
-    ).unwrap()
-}
-
 struct PipelineInfoRaw
 {
     pipeline: Arc<GraphicsPipeline>,
     layout: Arc<PipelineLayout>
+}
+
+impl From<Arc<GraphicsPipeline>> for PipelineInfoRaw
+{
+    fn from(value: Arc<GraphicsPipeline>) -> Self
+    {
+        Self{
+            layout: value.layout().clone(),
+            pipeline: value
+        }
+    }
+}
+
+pub struct PipelineCreateInfo
+{
+    stages: Vec<PipelineShaderStageCreateInfo>,
+    shaders: ShadersInfo<EntryPoint>,
+    layout: Arc<PipelineLayout>
+}
+
+impl PipelineCreateInfo
+{
+    pub fn new(
+        stages: Vec<PipelineShaderStageCreateInfo>,
+        shaders: ShadersInfo<EntryPoint>,
+        layout: Arc<PipelineLayout>
+    ) -> Self
+    {
+        Self{stages, shaders, layout}
+    }
 }
 
 // just put everything in 1 place who cares lmao
@@ -145,9 +147,9 @@ struct RenderInfo
     pub surface: Arc<Surface>,
     pub render_pass: Arc<RenderPass>,
     pub sampler: Arc<Sampler>,
-    shaders: Vec<ShadersInfo>,
+    pipeline_infos: Vec<PipelineCreateInfo>,
     pub descriptor_set_allocator: StandardDescriptorSetAllocator,
-    pub memory_allocator: StandardMemoryAllocator
+    pub memory_allocator: Arc<StandardMemoryAllocator>
 }
 
 impl RenderInfo
@@ -155,13 +157,17 @@ impl RenderInfo
     pub fn new(
         device: Arc<Device>,
         surface: Arc<Surface>,
-        shaders: Vec<ShadersInfo>,
+        pipeline_infos: Vec<PipelineCreateInfo>,
         capabilities: SurfaceCapabilities,
         image_format: Format,
         composite_alpha: CompositeAlpha
     ) -> Self
     {
-        let descriptor_set_allocator = StandardDescriptorSetAllocator::new(device.clone());
+        let descriptor_set_allocator = StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default()
+        );
+
         let sampler = Sampler::new(
             device.clone(),
             SamplerCreateInfo{
@@ -171,7 +177,7 @@ impl RenderInfo
             }
         ).unwrap();
 
-        let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
         let dimensions = Self::surface_size_associated(&surface);
 
@@ -187,7 +193,7 @@ impl RenderInfo
             surface.clone(),
             SwapchainCreateInfo{
                 min_image_count,
-                image_format: Some(image_format),
+                image_format,
                 image_extent: dimensions.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT,
                 composite_alpha,
@@ -199,10 +205,10 @@ impl RenderInfo
             device.clone(),
             attachments: {
                 color: {
-                    load: Clear,
-                    store: Store,
                     format: image_format,
                     samples: 1,
+                    load_op: Clear,
+                    store_op: Store,
                 }
             },
             pass: {
@@ -211,12 +217,12 @@ impl RenderInfo
             }
         ).unwrap();
 
-        let framebuffers = framebuffers(images.into_iter(), render_pass.clone());
+        let framebuffers = Self::framebuffers(images.into_iter(), render_pass.clone());
 
         let viewport = Viewport{
-            origin: [0.0, 0.0],
-            dimensions: dimensions.into(),
-            depth_range: 0.0..1.0
+            offset: [0.0, 0.0],
+            extent: dimensions.into(),
+            depth_range: 0.0..=1.0
         };
 
 
@@ -224,7 +230,7 @@ impl RenderInfo
             viewport.clone(),
             render_pass.clone(),
             device.clone(),
-            &shaders
+            &pipeline_infos
         );
 
         Self{
@@ -236,50 +242,85 @@ impl RenderInfo
             surface,
             render_pass,
             sampler,
-            shaders,
+            pipeline_infos,
             descriptor_set_allocator,
             memory_allocator
         }
     }
 
+    pub fn framebuffers(
+        images: impl Iterator<Item=Arc<Image>>,
+        render_pass: Arc<RenderPass>
+    ) -> Vec<Arc<Framebuffer>>
+    {
+        images.map(|image|
+        {
+            let view = ImageView::new_default(image).unwrap();
+            Framebuffer::new(
+                render_pass.clone(),
+                FramebufferCreateInfo{
+                    attachments: vec![view],
+                    ..Default::default()
+                }
+            ).unwrap()
+        }).collect::<Vec<_>>()
+    }
+
+
     fn generate_pipeline(
-        shader: &ShadersInfo,
+        shader: &PipelineCreateInfo,
         viewport: Viewport,
         subpass: Subpass,
         device: Arc<Device>
     ) -> PipelineInfoRaw
     {
-        let pipeline = GraphicsPipeline::start()
-            .vertex_input_state(ObjectVertex::per_vertex())
-            .vertex_shader(shader.vertex_entry(), ())
-            .input_assembly_state(InputAssemblyState::new())
-            .viewport_state(ViewportState::viewport_fixed_scissor_irrelevant([viewport]))
-            .fragment_shader(shader.fragment_entry(), ())
-            .color_blend_state(ColorBlendState::new(subpass.num_color_attachments()).blend_alpha())
-            .rasterization_state(RasterizationState{
-                cull_mode: StateMode::Fixed(CullMode::Back),
-                ..Default::default()
-            })
-            .render_pass(subpass)
-            .build(device)
-            .unwrap();
+        let pipeline = GraphicsPipeline::new(
+            device,
+            None,
+            GraphicsPipelineCreateInfo{
+                stages: shader.stages.iter().cloned().collect(),
+                vertex_input_state: Some(ObjectVertex::per_vertex()
+                    .definition(&shader.shaders.vertex.info().input_interface)
+                    .unwrap()
+                ),
+                input_assembly_state: Some(InputAssemblyState::default()),
+                viewport_state: Some(ViewportState{
+                    viewports: [viewport].into_iter().collect(),
+                    ..Default::default()
+                }),
+                rasterization_state: Some(RasterizationState{
+                    cull_mode: CullMode::Back,
+                    ..Default::default()
+                }),
+                multisample_state: Some(MultisampleState{
+                    rasterization_samples: SampleCount::Sample2,
+                    ..Default::default()
+                }),
+                color_blend_state: Some(ColorBlendState::with_attachment_states(
+                    subpass.num_color_attachments(),
+                    ColorBlendAttachmentState{
+                        blend: Some(AttachmentBlend::alpha()),
+                        ..Default::default()
+                    }
+                )),
+                subpass: Some(subpass.into()),
+                ..GraphicsPipelineCreateInfo::layout(shader.layout.clone())
+            }
+        ).unwrap();
 
-        PipelineInfoRaw{
-            layout: pipeline.layout().clone(),
-            pipeline
-        }
+        pipeline.into()
     }
 
     fn generate_pipelines(
         viewport: Viewport,
         render_pass: Arc<RenderPass>,
         device: Arc<Device>,
-        shaders: &[ShadersInfo]
+        pipeline_infos: &[PipelineCreateInfo]
     ) -> Vec<PipelineInfoRaw>
     {
         let subpass = Subpass::from(render_pass, 0).unwrap();
 
-        shaders.iter().map(|shader|
+        pipeline_infos.iter().map(|shader|
         {
             Self::generate_pipeline(
                 shader,
@@ -306,7 +347,7 @@ impl RenderInfo
     ) -> ResourceUploader<'a>
     {
         ResourceUploader{
-            allocator: &self.memory_allocator,
+            allocator: self.memory_allocator.clone(),
             builder,
             pipeline_info: self.pipeline_info(index)
         }
@@ -315,7 +356,7 @@ impl RenderInfo
     pub fn recreate(
         &mut self,
         redraw_window: bool
-    ) -> Result<(), SwapchainCreationError>
+    ) -> Result<(), Validated<VulkanError>>
     {
         let dimensions = self.surface_size();
 
@@ -325,17 +366,17 @@ impl RenderInfo
         })?;
 
         self.swapchain = new_swapchain;
-        self.framebuffers = framebuffers(new_images.into_iter(), self.render_pass.clone());
+        self.framebuffers = Self::framebuffers(new_images.into_iter(), self.render_pass.clone());
 
         if redraw_window
         {
-            self.viewport.dimensions = dimensions.into();
+            self.viewport.extent = dimensions.into();
 
             self.pipelines = Self::generate_pipelines(
                 self.viewport.clone(),
                 self.render_pass.clone(),
                 self.device.clone(),
-                &self.shaders
+                &self.pipeline_infos
             );
         }
 
@@ -368,23 +409,75 @@ pub struct GraphicsInfo
     pub event_loop: EventLoop<()>,
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
-    pub shaders: Vec<ShadersInfo>,
+    pub pipeline_infos: Vec<PipelineCreateInfo>,
     pub queues: Vec<Arc<Queue>>
+}
+
+// peeling back an onion layer by layer and crying profusely
+type FencesType = Box<[Option<FencesTypeInner>]>;
+type FencesTypeInner = Arc<FenceSignalFuture<PresentFuture<FencesTypeFuture>>>;
+type FencesTypeFuture = CommandBufferExecFuture<JoinFuture<Box<(dyn GpuFuture + 'static)>, SwapchainAcquireFuture>>;
+
+// stupid code duplication but im lazy wutever
+struct HandleEventInfoRaw
+{
+    command_allocator: StandardCommandBufferAllocator,
+    queue: Arc<Queue>,
+    fences: FencesType,
+    fences_amount: usize,
+    device: Arc<Device>,
+    render_info: RenderInfo,
+    options: AppOptions
+}
+
+struct HandleEventInfo<UserApp>
+{
+    command_allocator: StandardCommandBufferAllocator,
+    queue: Arc<Queue>,
+    fences: FencesType,
+    fences_amount: usize,
+    device: Arc<Device>,
+    render_info: RenderInfo,
+    options: AppOptions,
+    engine: Option<Engine>,
+    user_app: Option<UserApp>,
+    previous_time: Instant,
+    previous_frame_index: usize,
+    pipeline_index: usize,
+    initialized: bool,
+    recreate_swapchain: bool,
+    window_resized: bool
+}
+
+impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
+{
+    fn from(value: HandleEventInfoRaw) -> Self
+    {
+        Self{
+            command_allocator: value.command_allocator,
+            queue: value.queue,
+            fences: value.fences,
+            fences_amount: value.fences_amount,
+            device: value.device,
+            render_info: value.render_info,
+            options: value.options,
+            engine: None,
+            user_app: None,
+            previous_time: Instant::now(),
+            previous_frame_index: 0,
+            // TODO change this when im gonna make shaders blablabla
+            pipeline_index: 0,
+            initialized: false,
+            recreate_swapchain: false,
+            window_resized: false
+        }
+    }
 }
 
 pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 {
-    let GraphicsInfo{
-        surface,
-        event_loop,
-        physical_device,
-        device,
-        shaders,
-        queues
-    } = info;
-
-    let capabilities = physical_device
-        .surface_capabilities(&surface, Default::default())
+    let capabilities = info.physical_device
+        .surface_capabilities(&info.surface, Default::default())
         .unwrap();
 
     let composite_alpha =
@@ -403,91 +496,92 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
         }
     };
 
-    let image_format = physical_device
-        .surface_formats(&surface, Default::default())
+    let image_format = info.physical_device
+        .surface_formats(&info.surface, Default::default())
         .unwrap()[0].0;
 
-    let mut render_info = RenderInfo::new(
-        device.clone(), surface.clone(), shaders,
-        capabilities, image_format, composite_alpha
+    let render_info = RenderInfo::new(
+        info.device.clone(),
+        info.surface.clone(),
+        info.pipeline_infos,
+        capabilities,
+        image_format,
+        composite_alpha
     );
 
-    let command_allocator =
-        StandardCommandBufferAllocator::new(device.clone(), Default::default());
-
-    let queue = queues[0].clone();
-
     let fences_amount = render_info.framebuffers.len();
-    let mut fences = vec![None; fences_amount].into_boxed_slice();
-    let mut previous_frame_index = 0;
 
-    let mut engine: Option<Engine> = None;
-    let mut user_app: Option<UserApp> = None;
+    let mut handle_info: HandleEventInfo<UserApp> = HandleEventInfo::from(
+        HandleEventInfoRaw{
+            fences_amount,
+            fences: vec![None; fences_amount].into_boxed_slice(),
+            command_allocator: StandardCommandBufferAllocator::new(
+                info.device.clone(),
+                Default::default()
+            ),
+            queue: info.queues[0].clone(),
+            render_info,
+            device: info.device,
+            options
+        }
+    );
 
-    let mut previous_time = Instant::now();
-
-    let mut recreate_swapchain = false;
-    let mut window_resized = false;
-
-    let mut initialized = false;
-
-    // ill change this later wutever
-    let pipeline_index = 0;
-
-    event_loop.run(move |event, _, control_flow|
+    info.event_loop.run(move |event, event_loop|
     {
-        match event
+        handle_event(&mut handle_info, event, event_loop);
+    }).unwrap();
+}
+
+fn handle_event<UserApp: YanyaApp + 'static>(
+    info: &mut HandleEventInfo<UserApp>,
+    event: Event<()>,
+    event_loop: &EventLoopWindowTarget<()>
+)
+{
+    match event
+    {
+        Event::WindowEvent{
+            event,
+            ..
+        } =>
         {
-            Event::WindowEvent{
-                event: WindowEvent::CloseRequested,
-                ..
-            } =>
+            match event
             {
-                *control_flow = ControlFlow::Exit;
-            },
-            Event::WindowEvent{
-                event: WindowEvent::Resized(_),
-                ..
-            } =>
-            {
-                window_resized = true;
-            },
-            Event::WindowEvent{
-                event: WindowEvent::CursorMoved{position, ..},
-                   ..
-            } =>
-            {
-                if initialized 
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::Resized(_) => info.window_resized = true,
+                WindowEvent::CursorMoved{position, ..} =>
                 {
-                    let (width, height): (f64, f64) = render_info.surface_size().into();
+                    if !info.initialized
+                    {
+                        return;
+                    }
+
+                    let (width, height): (f64, f64) = info.render_info.surface_size().into();
                     let position = (position.x / width, position.y / height);
 
-                    user_app.as_mut().unwrap().mouse_move(position);
-                }
-            },
-            Event::DeviceEvent{
-                event: DeviceEvent::Button{
+                    info.user_app.as_mut().unwrap().mouse_move(position);
+                },
+                WindowEvent::MouseInput{
                     button,
-                    state
-                },
-                ..
-            } =>
-            {
-                if initialized
+                    state,
+                    ..
+                } =>
                 {
+                    if !info.initialized
+                    {
+                        return;
+                    }
+
                     let control = Control::Mouse{button, state};
-                    user_app.as_mut().unwrap().input(control);
-                }
-            },
-            Event::DeviceEvent{
-                event: DeviceEvent::MouseWheel{
-                    delta
+                    info.user_app.as_mut().unwrap().input(control);
                 },
-                ..
-            } =>
-            {
-                if initialized
+                WindowEvent::MouseWheel{delta, ..} =>
                 {
+                    if !info.initialized
+                    {
+                        return;
+                    }
+
                     let (x, y) = match delta
                     {
                         MouseScrollDelta::LineDelta(x, y) => (x as f64, y as f64),
@@ -495,136 +589,143 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
                     };
 
                     let control = Control::Scroll{x, y};
-                    user_app.as_mut().unwrap().input(control);
-                }
-            },
-            Event::DeviceEvent{
-                event: DeviceEvent::Key(input),
-                ..
-            } =>
-            {
-                if initialized
+                    info.user_app.as_mut().unwrap().input(control);
+                },
+                WindowEvent::KeyboardInput{event, ..} =>
                 {
-                    let KeyboardInput{virtual_keycode: button, state, ..} = input;
-
-                    if let Some(keycode) = button
+                    if !info.initialized
                     {
-                        let control = Control::Keyboard{keycode, state};
-                        user_app.as_mut().unwrap().input(control);
+                        return;
                     }
-                }
-            },
-            Event::MainEventsCleared =>
-            {
-                let mut builder = default_builder(&command_allocator, queue.queue_family_index());
 
-                let acquired =
-                    match swapchain::acquire_next_image(render_info.swapchain.clone(), None)
-                    {
-                        Ok(x) => Some(x),
-                        Err(AcquireError::OutOfDate) =>
-                        {
-                            None
-                        },
-                        Err(e) => panic!("error getting next image >-< ({:?})", e)
+                    let control = Control::Keyboard{
+                        keycode: event.physical_key,
+                        state: event.state
                     };
 
-                if let Some((image_index, suboptimal, acquire_future)) = acquired
+                    info.user_app.as_mut().unwrap().input(control);
+                },
+                WindowEvent::RedrawRequested =>
                 {
-                    let image_index = image_index as usize;
+                    handle_redraw(info);
+                },
+                _ => ()
+            }
+        },
+        _ => ()
+    }
+}
 
-                    if !initialized
-                    {
-                        initialized = true;
+fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp>)
+{
+    if info.recreate_swapchain || info.window_resized
+    {
+        info.recreate_swapchain = false;
 
-                        engine = Some(Engine::new(
-                            &options.assets_paths,
-                            render_info.resource_uploader(&mut builder, pipeline_index),
-                            device.clone(),
-                            fences_amount
-                        ));
-
-                        user_app = {
-                            let aspect = render_info.aspect();
-
-                            let init_info = engine
-                                .as_mut()
-                                .unwrap()
-                                .init_partial_info(
-                                    render_info.resource_uploader(&mut builder, pipeline_index),
-                                    aspect,
-                                    image_index
-                                );
-
-                            Some(UserApp::init(init_info))
-                        };
-                    }
-
-                    let run_frame_info = RunFrameInfo
-                    {
-                        engine: engine.as_mut().unwrap(),
-                        builder,
-                        image_index,
-                        layout: render_info.pipelines[pipeline_index].layout.clone(),
-                        render_info: &mut render_info,
-                        previous_time: &mut previous_time
-                    };
-
-                    let command_buffer = run_frame(
-                        run_frame_info,
-                        user_app.as_mut().unwrap(),
-                        &options
-                    );
-
-                    recreate_swapchain |= suboptimal;
-                    recreate_swapchain |= execute_builder(
-                        device.clone(),
-                        queue.clone(),
-                        render_info.swapchain.clone(),
-                        &mut fences,
-                        FrameData{
-                            command_buffer,
-                            image_index,
-                            previous_frame_index,
-                            acquire_future
-                        }
-                    );
-
-                    previous_frame_index = image_index;
-                }
-            },
-            Event::RedrawEventsCleared =>
-            {
-                if recreate_swapchain || window_resized
-                {
-                    recreate_swapchain = false;
-
-                    match render_info.recreate(window_resized)
-                    {
-                        Ok(_) => (),
-                        Err(SwapchainCreationError::ImageExtentNotSupported{..}) => return,
-                        Err(e) => panic!("couldnt recreate swapchain ; -; ({:?})", e)
-                    }
-
-                    if initialized
-                    {
-                        let swap_pipeline = render_info.pipeline_info(pipeline_index);
-
-                        engine.as_mut().unwrap().swap_pipeline(&swap_pipeline);
-                        user_app.as_mut().unwrap().swap_pipeline(swap_pipeline);
-
-                        if window_resized
-                        {
-                            user_app.as_mut().unwrap().resize(render_info.aspect());
-                        }
-                    }
-
-                    window_resized = false;
-                }
-            },
-            _ => ()
+        match info.render_info.recreate(info.window_resized)
+        {
+            Ok(_) => (),
+            Err(e) => panic!("couldnt recreate swapchain ; -; ({:?})", e)
         }
-    });
+
+        if !info.initialized
+        {
+            return;
+        }
+
+        let swap_pipeline = info.render_info.pipeline_info(info.pipeline_index);
+
+        info.engine.as_mut().unwrap().swap_pipeline(&swap_pipeline);
+        info.user_app.as_mut().unwrap().swap_pipeline(swap_pipeline);
+
+        if info.window_resized
+        {
+            info.user_app.as_mut().unwrap().resize(info.render_info.aspect());
+        }
+
+        info.window_resized = false;
+    }
+
+    let mut builder = AutoCommandBufferBuilder::primary(
+        &info.command_allocator,
+        info.queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit
+    ).unwrap();
+
+    let acquired =
+        match swapchain::acquire_next_image(info.render_info.swapchain.clone(), None)
+        {
+            Ok(x) => Some(x),
+            Err(Validated::Error(VulkanError::OutOfDate)) =>
+            {
+                None
+            },
+            Err(e) => panic!("error getting next image >-< ({:?})", e)
+        };
+
+    if let Some((image_index, suboptimal, acquire_future)) = acquired
+    {
+        let image_index = image_index as usize;
+
+        if !info.initialized
+        {
+            info.initialized = true;
+
+            info.engine = Some(Engine::new(
+                &info.options.assets_paths,
+                info.render_info.resource_uploader(&mut builder, info.pipeline_index),
+                info.device.clone(),
+                info.fences_amount
+            ));
+
+            info.user_app = {
+                let aspect = info.render_info.aspect();
+
+                let init_info = info.engine
+                    .as_mut()
+                    .unwrap()
+                    .init_partial_info(
+                        info.render_info.resource_uploader(&mut builder, info.pipeline_index),
+                        aspect,
+                        image_index
+                    );
+
+                Some(UserApp::init(init_info))
+            };
+        }
+
+        let run_frame_info = RunFrameInfo
+        {
+            engine: info.engine.as_mut().unwrap(),
+            builder,
+            image_index,
+            layout: info.render_info.pipelines[info.pipeline_index].layout.clone(),
+            render_info: &mut info.render_info,
+            previous_time: &mut info.previous_time
+        };
+
+        let command_buffer = run_frame(
+            run_frame_info,
+            info.user_app.as_mut().unwrap(),
+            &info.options
+        );
+
+        info.recreate_swapchain |= suboptimal;
+        info.recreate_swapchain |= execute_builder(
+            info.device.clone(),
+            info.queue.clone(),
+            info.render_info.swapchain.clone(),
+            &mut info.fences,
+            FrameData{
+                command_buffer,
+                image_index,
+                previous_frame_index: info.previous_frame_index,
+                acquire_future
+            }
+        );
+
+        info.previous_frame_index = image_index;
+    }
 }
 
 type FutureInner = PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>;
@@ -632,7 +733,7 @@ type FutureType = Option<Arc<FenceSignalFuture<FutureInner>>>;
 
 struct FrameData
 {
-    command_buffer: PrimaryAutoCommandBuffer,
+    command_buffer: Arc<PrimaryAutoCommandBuffer>,
     image_index: usize,
     previous_frame_index: usize,
     acquire_future: SwapchainAcquireFuture
@@ -652,7 +753,7 @@ fn run_frame<UserApp: YanyaApp>(
     mut frame_info: RunFrameInfo,
     user_app: &mut UserApp,
     options: &AppOptions
-) -> PrimaryAutoCommandBuffer
+) -> Arc<PrimaryAutoCommandBuffer>
 {
 
     let delta_time = frame_info.previous_time.elapsed().as_secs_f32();
@@ -682,10 +783,16 @@ fn run_frame<UserApp: YanyaApp>(
                 frame_info.render_info.framebuffers[frame_info.image_index].clone()
             )
         },
-        SubpassContents::Inline
-    ).unwrap().bind_pipeline_graphics(
+        SubpassBeginInfo{
+            contents: SubpassContents::Inline,
+            ..Default::default()
+        }
+    )
+    .unwrap()
+    .bind_pipeline_graphics(
         frame_info.render_info.pipelines[pipeline_index].pipeline.clone()
-    );
+    )
+    .unwrap();
 
     {
         let object_create_info = frame_info.engine
@@ -703,7 +810,7 @@ fn run_frame<UserApp: YanyaApp>(
         user_app.draw(draw_info);
     }
 
-    frame_info.builder.end_render_pass().unwrap();
+    frame_info.builder.end_render_pass(Default::default()).unwrap();
     frame_info.builder.build().unwrap()
 }
 
@@ -755,7 +862,7 @@ fn execute_builder(
     fences[image_index] = match fence
     {
         Ok(fence) => Some(Arc::new(fence)),
-        Err(FlushError::OutOfDate) =>
+        Err(Validated::Error(VulkanError::OutOfDate)) =>
         {
             recreate_swapchain = true;
             None

@@ -6,9 +6,16 @@ use std::{
 
 use vulkano::{
     VulkanLibrary,
+    Validated,
+    VulkanError,
     format::ClearValue,
     swapchain::Surface,
-    shader::{EntryPoint, ShaderModule, ShaderCreationError},
+    pipeline::{
+        PipelineLayout,
+        PipelineShaderStageCreateInfo,
+        layout::PipelineDescriptorSetLayoutCreateInfo
+    },
+    shader::{EntryPoint, ShaderModule},
     device::{
         Device,
         DeviceCreateInfo,
@@ -24,14 +31,12 @@ use vulkano::{
     instance::{Instance, InstanceCreateInfo}
 };
 
-use vulkano_win::VkSurfaceBuild;
-
 use winit::{
     window::{Icon, WindowBuilder},
-    event_loop::{DeviceEventFilter, EventLoop}
+    event_loop::{DeviceEvents, EventLoop}
 };
 
-use window::GraphicsInfo;
+use window::{GraphicsInfo, PipelineCreateInfo};
 
 use game_object::*;
 
@@ -146,32 +151,78 @@ impl Default for AssetsPaths
     }
 }
 
+type ShaderLoadResult = Result<Arc<ShaderModule>, Validated<VulkanError>>;
+
+type ShaderFn = fn(Arc<Device>) -> ShaderLoadResult;
+
 #[derive(Clone)]
-pub struct ShadersInfo<T=Arc<ShaderModule>>
+pub struct ShadersInfo<VT, FT=VT>
 {
-    vertex: T,
-    fragment: T
+    vertex: VT,
+    fragment: FT
 }
 
-impl<T> ShadersInfo<T>
+impl<VT, FT> ShadersInfo<VT, FT>
 {
-    pub fn new(vertex: T, fragment: T) -> Self
+    pub fn new_raw(vertex: VT, fragment: FT) -> Self
     {
         Self{vertex, fragment}
     }
+}
 
-    pub fn map<F, U>(self, mut f: F) -> ShadersInfo<U>
-    where
-        F: FnMut(T) -> U
+impl ShadersInfo<ShaderFn>
+{
+    pub fn new(vertex: ShaderFn, fragment: ShaderFn) -> Self
     {
+        Self{
+            vertex,
+            fragment
+        }
+    }
+
+    pub fn load(self, device: Arc<Device>) -> ShadersInfo<Arc<ShaderModule>>
+    {
+        let err_and_quit = |name, err|
+        {
+            panic!("error loading {} shader: {}", name, err)
+        };
+
+        let vertex = (self.vertex)(device.clone())
+            .unwrap_or_else(|err| err_and_quit("vertex", err));
+
+        let fragment = (self.fragment)(device)
+            .unwrap_or_else(|err| err_and_quit("fragment", err));
+
         ShadersInfo{
-            vertex: f(self.vertex),
-            fragment: f(self.fragment)
+            vertex,
+            fragment,
         }
     }
 }
 
-impl ShadersInfo
+impl ShadersInfo<EntryPoint>
+{
+    pub fn stages(self) -> [PipelineShaderStageCreateInfo; 2]
+    {
+        [
+            PipelineShaderStageCreateInfo::new(self.vertex),
+            PipelineShaderStageCreateInfo::new(self.fragment)
+        ]
+    }
+}
+
+impl From<&ShadersInfo<Arc<ShaderModule>>> for ShadersInfo<EntryPoint>
+{
+    fn from(value: &ShadersInfo<Arc<ShaderModule>>) -> Self
+    {
+        Self{
+            vertex: value.vertex_entry(),
+            fragment: value.fragment_entry()
+        }
+    }
+}
+
+impl ShadersInfo<Arc<ShaderModule>>
 {
     pub fn vertex_entry(&self) -> EntryPoint
     {
@@ -184,31 +235,49 @@ impl ShadersInfo
     }
 }
 
-type ShaderFunc = Box<dyn FnOnce(Arc<Device>) -> Result<Arc<ShaderModule>, ShaderCreationError>>;
-
-pub struct ShaderItem
+pub struct ShadersContainer
 {
-    func: ShaderFunc
+    shaders: Vec<ShadersInfo<ShaderFn>>
 }
 
-impl ShaderItem
+impl IntoIterator for ShadersContainer
 {
-    pub fn new(func: ShaderFunc) -> Self
+    type IntoIter = <Vec<ShadersInfo<ShaderFn>> as IntoIterator>::IntoIter;
+    type Item = ShadersInfo<ShaderFn>;
+
+    fn into_iter(self) -> Self::IntoIter
     {
-        Self{func: func.into()}
+        self.shaders.into_iter()
+    }
+}
+
+impl From<Vec<ShadersInfo<ShaderFn>>> for ShadersContainer
+{
+    fn from(shaders: Vec<ShadersInfo<ShaderFn>>) -> Self
+    {
+        Self{shaders}
+    }
+}
+
+impl ShadersContainer
+{
+    pub fn new() -> Self
+    {
+        Self{shaders: Vec::new()}
     }
 
-    fn load(self, device: Arc<Device>) -> Arc<ShaderModule>
+    pub fn is_empty(&self) -> bool
     {
-        (self.func)(device).unwrap()
+        self.shaders.is_empty()
     }
 }
 
 pub struct AppBuilder<UserApp>
 {
     instance: Arc<Instance>,
-    surface: WindowBuilder,
-    shaders: Vec<ShadersInfo<ShaderItem>>,
+    window_builder: WindowBuilder,
+    event_loop: EventLoop<()>,
+    shaders: ShadersContainer,
     options: AppOptions,
     _user_app: PhantomData<UserApp>
 }
@@ -217,7 +286,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 {
     pub fn with_title(mut self, title: &str) -> Self
     {
-        self.surface = self.surface.with_title(title);
+        self.window_builder = self.window_builder.with_title(title);
 
         self
     }
@@ -229,7 +298,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 
         let icon = Icon::from_rgba(texture.into_vec(), width, height).ok();
 
-        self.surface = self.surface.with_window_icon(icon);
+        self.window_builder = self.window_builder.with_window_icon(icon);
 
         self
     }
@@ -255,11 +324,9 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         self
     }
 
-    pub fn with_shaders<V>(mut self, shaders: V) -> Self
-    where
-        V: Into<Vec<ShadersInfo<ShaderItem>>>
+    pub fn with_shaders(mut self, shaders: ShadersContainer) -> Self
     {
-        self.shaders = shaders.into();
+        self.shaders = shaders;
 
         self
     }
@@ -269,31 +336,40 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         if self.shaders.is_empty()
         {
             // load default shaders
-            self.shaders = vec![ShadersInfo::new(
-                ShaderItem::new(Box::new(|device| default_vertex::load(device))),
-                ShaderItem::new(Box::new(|device| default_fragment::load(device)))
-            )];
+            self.shaders = ShadersContainer::from(
+                vec![ShadersInfo::new(default_vertex::load, default_fragment::load)]
+            );
         }
 
-        let event_loop = EventLoop::new();
-        event_loop.set_device_event_filter(DeviceEventFilter::Unfocused);
+        let window = Arc::new(self.window_builder.build(&self.event_loop).unwrap());
 
-        let surface = self.surface.build_vk_surface(&event_loop, self.instance.clone()).unwrap();
+        let surface = Surface::from_window(self.instance.clone(), window)
+            .unwrap();
 
         let (physical_device, (device, queues)) =
             Self::create_device(surface.clone(), self.instance);
 
-        let shaders = self.shaders.into_iter().map(|shader_item|
+        let pipeline_infos = self.shaders.into_iter().map(|shader_item|
         {
-            shader_item.map(|shader| shader.load(device.clone()))
+            let shader = shader_item.load(device.clone());
+
+            let stages = ShadersInfo::from(&shader).stages();
+
+            let info = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
+                .into_pipeline_layout_create_info(device.clone())
+                .unwrap();
+
+            let layout = PipelineLayout::new(device.clone(), info).unwrap();
+
+            PipelineCreateInfo::new(stages.into(), (&shader).into(), layout)
         }).collect();
 
         let graphics_info = GraphicsInfo{
             surface,
-            event_loop,
+            event_loop: self.event_loop,
             physical_device,
             device,
-            shaders,
+            pipeline_infos,
             queues: queues.collect()
         };
 
@@ -372,7 +448,10 @@ impl<UserApp: YanyaApp + 'static> App<UserApp>
     {
         let library = VulkanLibrary::new().expect("nyo vulkan? ;-;");
 
-        let enabled_extensions = vulkano_win::required_extensions(&library);
+        let event_loop = EventLoop::new().unwrap();
+        event_loop.listen_device_events(DeviceEvents::WhenFocused);
+
+        let enabled_extensions = Surface::required_extensions(&event_loop);
         let instance = Instance::new(
             library,
             InstanceCreateInfo{
@@ -381,15 +460,12 @@ impl<UserApp: YanyaApp + 'static> App<UserApp>
             }
         ).expect("cant create vulkan instance..");
 
-        let surface = WindowBuilder::new();
-
-        let options = AppOptions::default();
-
         AppBuilder{
             instance,
-            surface,
-            shaders: Vec::new(),
-            options,
+            window_builder: WindowBuilder::new(),
+            event_loop,
+            shaders: ShadersContainer::new(),
+            options: AppOptions::default(),
             _user_app: PhantomData
         }
     }
