@@ -206,7 +206,7 @@ impl RenderInfo
             attachments: {
                 color: {
                     format: image_format,
-                    samples: 1,
+                    samples: 2,
                     load_op: Clear,
                     store_op: Store,
                 }
