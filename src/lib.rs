@@ -51,6 +51,10 @@ pub use text_object::TextObject;
 pub use text_factory::TextInfo;
 
 pub use nalgebra::Vector3;
+pub use winit::{
+    keyboard::PhysicalKey,
+    event::{ElementState, MouseButton}
+};
 
 pub use transform::{
     Transform,
@@ -251,19 +255,22 @@ impl IntoIterator for ShadersContainer
     }
 }
 
-impl From<Vec<ShadersInfo<ShaderFn>>> for ShadersContainer
-{
-    fn from(shaders: Vec<ShadersInfo<ShaderFn>>) -> Self
-    {
-        Self{shaders}
-    }
-}
+pub struct ShaderId(usize);
 
 impl ShadersContainer
 {
     pub fn new() -> Self
     {
         Self{shaders: Vec::new()}
+    }
+
+    pub fn push(&mut self, value: ShadersInfo<ShaderFn>) -> ShaderId
+    {
+        let id = ShaderId(self.shaders.len());
+
+        self.shaders.push(value);
+
+        id
     }
 
     pub fn is_empty(&self) -> bool
@@ -336,9 +343,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         if self.shaders.is_empty()
         {
             // load default shaders
-            self.shaders = ShadersContainer::from(
-                vec![ShadersInfo::new(default_vertex::load, default_fragment::load)]
-            );
+            self.shaders.push(ShadersInfo::new(default_vertex::load, default_fragment::load));
         }
 
         let window = Arc::new(self.window_builder.build(&self.event_loop).unwrap());
