@@ -369,9 +369,8 @@ impl CharsRasterizer
                 return DEFAULT_ADVANCE
             }
         };
-        let advance = advance.x() / units_per_em as f32;
 
-        advance
+        advance.x() / units_per_em as f32
     }
 
     pub fn non_ascii_texture(
@@ -380,11 +379,10 @@ impl CharsRasterizer
         c: char
     ) -> Option<Arc<RwLock<Texture>>>
     {
-        match self.glyph_image(c)
+        self.glyph_image(c).map(|image|
         {
-            Some(image) => Some(Self::image_to_texture(resource_uploader, image)),
-            None => None
-        }
+            Self::image_to_texture(resource_uploader, image)
+        })
     }
 
     fn image_to_texture(

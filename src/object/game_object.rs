@@ -90,6 +90,6 @@ impl<'a> UpdateBuffersInfo<'a>
 
 pub trait GameObject
 {
-	fn update_buffers<'a, 'b>(&mut self, info: &'a mut UpdateBuffersInfo<'b>);
-	fn draw<'a, 'b>(&self, info: &'a mut DrawInfo<'b>);
+	fn update_buffers(&mut self, info: &mut UpdateBuffersInfo);
+	fn draw(&self, info: &mut DrawInfo);
 }

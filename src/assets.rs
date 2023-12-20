@@ -65,7 +65,7 @@ impl FilesLoader
 
     pub fn load(folder_path: impl AsRef<Path>) -> impl Iterator<Item=NamedValue<PathBuf>>
     {
-		Self::recursive_dir(folder_path.as_ref()).into_iter().map(move |name|
+		Self::recursive_dir(folder_path.as_ref()).map(move |name|
 		{
             let value = name.clone();
 
@@ -153,7 +153,7 @@ impl Assets
             {
                 (name, Arc::new(RwLock::new(value)))
             }).collect()
-        }).unwrap_or_else(|| HashMap::new())
+        }).unwrap_or_default()
     }
 
     pub fn default_model(&self, id: DefaultModel) -> Arc<RwLock<Model>>
@@ -195,15 +195,13 @@ impl Assets
     {
         DefaultModel::iter().map(|default_model|
         {
-            let model;
-
-            match default_model
+            let model = match default_model
             {
                 DefaultModel::Square =>
                 {
-                    model = Model::square(1.0);
+                    Model::square(1.0)
                 }
-            }
+            };
 
             Arc::new(RwLock::new(model))
         }).collect()
@@ -237,17 +235,17 @@ impl fmt::Debug for Assets
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
-        let texture_names = self.textures.iter().map(|(key, _value)| key.to_owned())
+        let texture_names = self.textures.keys().map(|x| x.to_owned())
             .reduce(|acc, v|
             {
                 acc + ", " + &v
-            }).unwrap_or_else(String::new);
+            }).unwrap_or_default();
 
-        let model_names = self.models.iter().map(|(key, _value)| key.to_owned())
+        let model_names = self.models.keys().map(|x| x.to_owned())
             .reduce(|acc, v|
             {
                 acc + ", " + &v
-            }).unwrap_or_else(String::new);
+            }).unwrap_or_default();
 
         write!(f, "Assets {{ textures: [{}], models: [{}] }}", texture_names, model_names)
     }

@@ -1,3 +1,7 @@
+#![allow(clippy::suspicious_else_formatting)]
+#![allow(clippy::match_like_matches_macro)]
+#![allow(clippy::new_without_default)]
+
 use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
@@ -105,7 +109,7 @@ pub trait YanyaApp
 where
     Self: Sized
 {
-    fn init<'a>(info: InitPartialInfo<'a>) -> Self;
+    fn init(info: InitPartialInfo) -> Self;
 
     fn input(&mut self, _control: Control) {}
 
@@ -113,11 +117,11 @@ where
 
     fn update(&mut self, _dt: f32) {}
 
-    fn draw<'a>(&mut self, _info: DrawInfo<'a>) {}
+    fn draw(&mut self, _info: DrawInfo) {}
 
     fn resize(&mut self, _aspect: f32) {}
 
-    fn update_buffers<'a>(&mut self, _info: UpdateBuffersPartialInfo<'a>) {}
+    fn update_buffers(&mut self, _info: UpdateBuffersPartialInfo) {}
 
     fn swap_pipeline(&mut self, _info: PipelineInfo) {}
 }
@@ -141,21 +145,11 @@ impl Default for AppOptions
     }
 }
 
+#[derive(Default)]
 pub struct AssetsPaths
 {
     textures: Option<PathBuf>,
     models: Option<PathBuf>
-}
-
-impl Default for AssetsPaths
-{
-    fn default() -> Self
-    {
-        Self{
-            textures: None,
-            models: None
-        }
-    }
 }
 
 type ShaderLoadResult = Result<Arc<ShaderModule>, Validated<VulkanError>>;
@@ -460,6 +454,7 @@ pub struct App<UserApp>
 
 impl<UserApp: YanyaApp + 'static> App<UserApp>
 {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> AppBuilder<UserApp>
     {
         let library = VulkanLibrary::new().expect("nyo vulkan? ;-;");

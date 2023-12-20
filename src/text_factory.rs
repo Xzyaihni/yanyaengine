@@ -92,7 +92,7 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
         TextObject::new(
             self.resource_uploader,
             info,
-            &mut self.fonts_container
+            self.fonts_container
         )
     }
 }

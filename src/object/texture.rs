@@ -235,7 +235,6 @@ impl Texture
                 image_type: ImageType::Dim2d,
                 format: Format::R8G8B8A8_SRGB,
                 extent: [image.width, image.height, 1],
-                samples: resource_uploader.samples.clone(),
                 usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
                 ..Default::default()
             },

@@ -29,7 +29,7 @@ impl<'a> BuilderWrapper<'a>
         &mut self.resource_uploader
     }
 
-    pub fn builder<'b>(&'b mut self) -> &'b mut CommandBuilderType
+    pub fn builder(&mut self) -> &mut CommandBuilderType
     {
         self.resource_uploader.builder
     }

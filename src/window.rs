@@ -7,7 +7,7 @@ use vulkano::{
     Validated,
     VulkanError,
     format::Format,
-    memory::allocator::StandardMemoryAllocator,
+    memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     descriptor_set::allocator::StandardDescriptorSetAllocator,
     shader::EntryPoint,
     sync::{
@@ -32,6 +32,8 @@ use vulkano::{
     image::{
         ImageUsage,
         Image,
+        ImageType,
+        ImageCreateInfo,
         SampleCount,
         view::ImageView,
         sampler::{
@@ -197,7 +199,7 @@ impl RenderInfo
                 min_image_count,
                 image_format,
                 image_extent: dimensions.into(),
-                image_usage: ImageUsage::COLOR_ATTACHMENT,
+                image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST,
                 composite_alpha,
                 ..Default::default()
             }
@@ -206,20 +208,32 @@ impl RenderInfo
         let render_pass = vulkano::single_pass_renderpass!(
             device.clone(),
             attachments: {
-                color: {
+                multisampled: {
                     format: image_format,
                     samples: samples as u32,
                     load_op: Clear,
-                    store_op: Store,
+                    store_op: DontCare
+                },
+                color: {
+                    format: image_format,
+                    samples: 1,
+                    load_op: DontCare,
+                    store_op: Store
                 }
             },
             pass: {
-                color: [color],
+                color: [multisampled],
+                color_resolve: [color],
                 depth_stencil: {}
             }
         ).unwrap();
 
-        let framebuffers = Self::framebuffers(images.into_iter(), render_pass.clone());
+        let framebuffers = Self::framebuffers(
+            memory_allocator.clone(),
+            samples,
+            images.into_iter(),
+            render_pass.clone()
+        );
 
         let viewport = Viewport{
             offset: [0.0, 0.0],
@@ -231,7 +245,6 @@ impl RenderInfo
         let pipelines = Self::generate_pipelines(
             viewport.clone(),
             render_pass.clone(),
-            samples.clone(),
             device.clone(),
             &pipeline_infos
         );
@@ -253,17 +266,36 @@ impl RenderInfo
     }
 
     pub fn framebuffers(
+        memory_allocator: Arc<StandardMemoryAllocator>,
+        samples: SampleCount,
         images: impl Iterator<Item=Arc<Image>>,
         render_pass: Arc<RenderPass>
     ) -> Vec<Arc<Framebuffer>>
     {
         images.map(|image|
         {
+            // im not sure if i need one for each swapchain image or if they can share??
+            let multisampled_image = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo{
+                    image_type: ImageType::Dim2d,
+                    format: image.format(),
+                    extent: image.extent(),
+                    usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                    samples,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default()
+            ).unwrap();
+
+            let multisampled = ImageView::new_default(multisampled_image).unwrap();
+
             let view = ImageView::new_default(image).unwrap();
+
             Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo{
-                    attachments: vec![view],
+                    attachments: vec![multisampled, view],
                     ..Default::default()
                 }
             ).unwrap()
@@ -275,7 +307,6 @@ impl RenderInfo
         shader: &PipelineCreateInfo,
         viewport: Viewport,
         subpass: Subpass,
-        samples: SampleCount,
         device: Arc<Device>
     ) -> PipelineInfoRaw
     {
@@ -298,7 +329,7 @@ impl RenderInfo
                     ..Default::default()
                 }),
                 multisample_state: Some(MultisampleState{
-                    rasterization_samples: samples,
+                    rasterization_samples: subpass.num_samples().unwrap(),
                     ..Default::default()
                 }),
                 color_blend_state: Some(ColorBlendState::with_attachment_states(
@@ -319,7 +350,6 @@ impl RenderInfo
     fn generate_pipelines(
         viewport: Viewport,
         render_pass: Arc<RenderPass>,
-        samples: SampleCount,
         device: Arc<Device>,
         pipeline_infos: &[PipelineCreateInfo]
     ) -> Vec<PipelineInfoRaw>
@@ -332,7 +362,6 @@ impl RenderInfo
                 shader,
                 viewport.clone(),
                 subpass.clone(),
-                samples.clone(),
                 device.clone()
             )
         }).collect()
@@ -356,7 +385,6 @@ impl RenderInfo
         ResourceUploader{
             allocator: self.memory_allocator.clone(),
             builder,
-            samples: self.samples.clone(),
             pipeline_info: self.pipeline_info(index)
         }
     }
@@ -374,7 +402,12 @@ impl RenderInfo
         })?;
 
         self.swapchain = new_swapchain;
-        self.framebuffers = Self::framebuffers(new_images.into_iter(), self.render_pass.clone());
+        self.framebuffers = Self::framebuffers(
+            self.memory_allocator.clone(),
+            self.samples,
+            new_images.into_iter(),
+            self.render_pass.clone()
+        );
 
         if redraw_window
         {
@@ -383,7 +416,6 @@ impl RenderInfo
             self.pipelines = Self::generate_pipelines(
                 self.viewport.clone(),
                 self.render_pass.clone(),
-                self.samples.clone(),
                 self.device.clone(),
                 &self.pipeline_infos
             );
@@ -598,7 +630,7 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                     let (x, y) = match delta
                     {
                         MouseScrollDelta::LineDelta(x, y) => (x as f64, y as f64),
-                        MouseScrollDelta::PixelDelta(PhysicalPosition{x, y}) => (x as f64, y as f64)
+                        MouseScrollDelta::PixelDelta(PhysicalPosition{x, y}) => (x, y)
                     };
 
                     let control = Control::Scroll{x, y};
@@ -790,7 +822,7 @@ fn run_frame<UserApp: YanyaApp>(
 
     frame_info.builder.begin_render_pass(
         RenderPassBeginInfo{
-            clear_values: vec![Some(options.clear_color)],
+            clear_values: vec![Some(options.clear_color), None],
             ..RenderPassBeginInfo::framebuffer(
                 frame_info.render_info.framebuffers[frame_info.image_index].clone()
             )

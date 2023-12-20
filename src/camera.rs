@@ -151,8 +151,7 @@ impl Camera
     pub fn normalized_aspect(&self) -> (f32, f32)
     {
         let lowest = self.size.0.min(self.size.1);
-        let normalized = (self.size.0 / lowest, self.size.1 / lowest);
 
-        normalized
+        (self.size.0 / lowest, self.size.1 / lowest)
     }
 }

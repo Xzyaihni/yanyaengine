@@ -52,7 +52,7 @@ impl ObjectTransform
 
         matrix *= Self::calculate_stretch_matrix(transform);
 
-        matrix.prepend_translation_mut(&origin);
+        matrix.prepend_translation_mut(origin);
 
         matrix.prepend_nonuniform_scaling_mut(&transform.scale);
         matrix.append_translation_mut(&transform.position);
