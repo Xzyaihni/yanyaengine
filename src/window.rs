@@ -176,7 +176,7 @@ impl RenderInfo
             device.clone(),
             SamplerCreateInfo{
                 mag_filter: Filter::Nearest,
-                min_filter: Filter::Nearest,
+                min_filter: Filter::Linear,
                 ..Default::default()
             }
         ).unwrap();
