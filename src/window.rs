@@ -82,7 +82,7 @@ use winit::{
         WindowEvent,
         MouseScrollDelta
     },
-    event_loop::{EventLoop, EventLoopWindowTarget}
+    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget}
 };
 
 use crate::{
@@ -147,6 +147,7 @@ struct RenderInfo
     pub surface: Arc<Surface>,
     pub render_pass: Arc<RenderPass>,
     pub sampler: Arc<Sampler>,
+    pub samples: SampleCount,
     pipeline_infos: Vec<PipelineCreateInfo>,
     pub descriptor_set_allocator: StandardDescriptorSetAllocator,
     pub memory_allocator: Arc<StandardMemoryAllocator>
@@ -158,6 +159,7 @@ impl RenderInfo
         device: Arc<Device>,
         surface: Arc<Surface>,
         pipeline_infos: Vec<PipelineCreateInfo>,
+        samples: SampleCount,
         capabilities: SurfaceCapabilities,
         image_format: Format,
         composite_alpha: CompositeAlpha
@@ -206,7 +208,7 @@ impl RenderInfo
             attachments: {
                 color: {
                     format: image_format,
-                    samples: 2,
+                    samples: samples as u32,
                     load_op: Clear,
                     store_op: Store,
                 }
@@ -229,6 +231,7 @@ impl RenderInfo
         let pipelines = Self::generate_pipelines(
             viewport.clone(),
             render_pass.clone(),
+            samples.clone(),
             device.clone(),
             &pipeline_infos
         );
@@ -241,6 +244,7 @@ impl RenderInfo
             viewport,
             surface,
             render_pass,
+            samples,
             sampler,
             pipeline_infos,
             descriptor_set_allocator,
@@ -271,6 +275,7 @@ impl RenderInfo
         shader: &PipelineCreateInfo,
         viewport: Viewport,
         subpass: Subpass,
+        samples: SampleCount,
         device: Arc<Device>
     ) -> PipelineInfoRaw
     {
@@ -293,7 +298,7 @@ impl RenderInfo
                     ..Default::default()
                 }),
                 multisample_state: Some(MultisampleState{
-                    rasterization_samples: SampleCount::Sample2,
+                    rasterization_samples: samples,
                     ..Default::default()
                 }),
                 color_blend_state: Some(ColorBlendState::with_attachment_states(
@@ -314,6 +319,7 @@ impl RenderInfo
     fn generate_pipelines(
         viewport: Viewport,
         render_pass: Arc<RenderPass>,
+        samples: SampleCount,
         device: Arc<Device>,
         pipeline_infos: &[PipelineCreateInfo]
     ) -> Vec<PipelineInfoRaw>
@@ -326,6 +332,7 @@ impl RenderInfo
                 shader,
                 viewport.clone(),
                 subpass.clone(),
+                samples.clone(),
                 device.clone()
             )
         }).collect()
@@ -349,6 +356,7 @@ impl RenderInfo
         ResourceUploader{
             allocator: self.memory_allocator.clone(),
             builder,
+            samples: self.samples.clone(),
             pipeline_info: self.pipeline_info(index)
         }
     }
@@ -375,6 +383,7 @@ impl RenderInfo
             self.pipelines = Self::generate_pipelines(
                 self.viewport.clone(),
                 self.render_pass.clone(),
+                self.samples.clone(),
                 self.device.clone(),
                 &self.pipeline_infos
             );
@@ -410,6 +419,7 @@ pub struct GraphicsInfo
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub pipeline_infos: Vec<PipelineCreateInfo>,
+    pub samples: SampleCount,
     pub queues: Vec<Arc<Queue>>
 }
 
@@ -504,6 +514,7 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
         info.device.clone(),
         info.surface.clone(),
         info.pipeline_infos,
+        info.samples,
         capabilities,
         image_format,
         composite_alpha
@@ -525,6 +536,8 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
             options
         }
     );
+
+    info.event_loop.set_control_flow(ControlFlow::Poll);
 
     info.event_loop.run(move |event, event_loop|
     {
@@ -605,12 +618,12 @@ fn handle_event<UserApp: YanyaApp + 'static>(
 
                     info.user_app.as_mut().unwrap().input(control);
                 },
-                WindowEvent::RedrawRequested =>
-                {
-                    handle_redraw(info);
-                },
                 _ => ()
             }
+        },
+        Event::AboutToWait =>
+        {
+            handle_redraw(info);
         },
         _ => ()
     }
@@ -618,7 +631,7 @@ fn handle_event<UserApp: YanyaApp + 'static>(
 
 fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp>)
 {
-    if info.recreate_swapchain || info.window_resized
+    if info.recreate_swapchain || (info.initialized && info.window_resized)
     {
         info.recreate_swapchain = false;
 
@@ -755,7 +768,6 @@ fn run_frame<UserApp: YanyaApp>(
     options: &AppOptions
 ) -> Arc<PrimaryAutoCommandBuffer>
 {
-
     let delta_time = frame_info.previous_time.elapsed().as_secs_f32();
     *frame_info.previous_time = Instant::now();
 

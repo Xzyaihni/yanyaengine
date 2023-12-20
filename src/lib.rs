@@ -10,6 +10,7 @@ use vulkano::{
     VulkanError,
     format::ClearValue,
     swapchain::Surface,
+    image::SampleCount,
     pipeline::{
         PipelineLayout,
         PipelineShaderStageCreateInfo,
@@ -124,7 +125,8 @@ where
 pub struct AppOptions
 {
     clear_color: ClearValue,
-    assets_paths: AssetsPaths
+    assets_paths: AssetsPaths,
+    samples: SampleCount
 }
 
 impl Default for AppOptions
@@ -133,7 +135,8 @@ impl Default for AppOptions
     {
         Self{
             clear_color: [0.0, 0.0, 0.0, 1.0].into(),
-            assets_paths: AssetsPaths::default()
+            assets_paths: AssetsPaths::default(),
+            samples: SampleCount::Sample2
         }
     }
 }
@@ -324,6 +327,13 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         self
     }
 
+    pub fn without_multisampling(mut self) -> Self
+    {
+        self.options.samples = SampleCount::Sample1;
+
+        self
+    }
+
     pub fn with_models_path<P: Into<PathBuf>>(mut self, path: P) -> Self
     {
         self.options.assets_paths.models = Some(path.into());
@@ -375,6 +385,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
             physical_device,
             device,
             pipeline_infos,
+            samples: self.options.samples,
             queues: queues.collect()
         };
 
