@@ -205,28 +205,48 @@ impl RenderInfo
             }
         ).unwrap();
 
-        let render_pass = vulkano::single_pass_renderpass!(
-            device.clone(),
-            attachments: {
-                multisampled: {
-                    format: image_format,
-                    samples: samples as u32,
-                    load_op: Clear,
-                    store_op: DontCare
+        let render_pass = if let SampleCount::Sample1 = samples
+        {
+            vulkano::single_pass_renderpass!(
+                device.clone(),
+                attachments: {
+                    color: {
+                        format: image_format,
+                        samples: 1,
+                        load_op: Clear,
+                        store_op: Store
+                    }
                 },
-                color: {
-                    format: image_format,
-                    samples: 1,
-                    load_op: DontCare,
-                    store_op: Store
+                pass: {
+                    color: [color],
+                    depth_stencil: {}
                 }
-            },
-            pass: {
-                color: [multisampled],
-                color_resolve: [color],
-                depth_stencil: {}
-            }
-        ).unwrap();
+            )
+        } else
+        {
+            vulkano::single_pass_renderpass!(
+                device.clone(),
+                attachments: {
+                    multisampled: {
+                        format: image_format,
+                        samples: samples as u32,
+                        load_op: Clear,
+                        store_op: DontCare
+                    },
+                    color: {
+                        format: image_format,
+                        samples: 1,
+                        load_op: DontCare,
+                        store_op: Store
+                    }
+                },
+                pass: {
+                    color: [multisampled],
+                    color_resolve: [color],
+                    depth_stencil: {}
+                }
+            )
+        }.unwrap();
 
         let framebuffers = Self::framebuffers(
             memory_allocator.clone(),
@@ -274,28 +294,39 @@ impl RenderInfo
     {
         images.map(|image|
         {
-            // im not sure if i need one for each swapchain image or if they can share??
-            let multisampled_image = Image::new(
-                memory_allocator.clone(),
-                ImageCreateInfo{
-                    image_type: ImageType::Dim2d,
-                    format: image.format(),
-                    extent: image.extent(),
-                    usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                    samples,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default()
-            ).unwrap();
-
-            let multisampled = ImageView::new_default(multisampled_image).unwrap();
+            let format = image.format();
+            let extent = image.extent();
 
             let view = ImageView::new_default(image).unwrap();
+
+            let attachments = if let SampleCount::Sample1 = samples
+            {
+                vec![view]
+            } else
+            {
+                // im not sure if i need one for each swapchain image or if they can share??
+                let multisampled_image = Image::new(
+                    memory_allocator.clone(),
+                    ImageCreateInfo{
+                        image_type: ImageType::Dim2d,
+                        format,
+                        extent,
+                        usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                        samples,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo::default()
+                ).unwrap();
+
+                let multisampled = ImageView::new_default(multisampled_image).unwrap();
+
+                vec![multisampled, view]
+            };
 
             Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo{
-                    attachments: vec![multisampled, view],
+                    attachments,
                     ..Default::default()
                 }
             ).unwrap()
@@ -820,9 +851,19 @@ fn run_frame<UserApp: YanyaApp>(
         user_app.update_buffers(object_create_info);
     }
 
+    let clear_color = Some(options.clear_color);
+
+    let clear_values = if let SampleCount::Sample1 = frame_info.render_info.samples
+    {
+        vec![clear_color]
+    } else
+    {
+        vec![clear_color, None]
+    };
+
     frame_info.builder.begin_render_pass(
         RenderPassBeginInfo{
-            clear_values: vec![Some(options.clear_color), None],
+            clear_values,
             ..RenderPassBeginInfo::framebuffer(
                 frame_info.render_info.framebuffers[frame_info.image_index].clone()
             )
