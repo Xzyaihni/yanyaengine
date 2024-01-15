@@ -701,7 +701,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp
         match info.render_info.recreate(info.window_resized)
         {
             Ok(_) => (),
-            Err(e) => panic!("couldnt recreate swapchain ; -; ({:?})", e)
+            Err(e) => panic!("couldnt recreate swapchain ; -; ({e})")
         }
 
         if !info.initialized
@@ -736,7 +736,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp
             {
                 None
             },
-            Err(e) => panic!("error getting next image >-< ({:?})", e)
+            Err(e) => panic!("error getting next image >-< ({e})")
         };
 
     if let Some((image_index, suboptimal, acquire_future)) = acquired
@@ -954,7 +954,7 @@ fn execute_builder(
         },
         Err(e) =>
         {
-            eprintln!("error flushing future ;; ({:?})", e);
+            eprintln!("error flushing future ;; ({e})");
             None
         }
     };

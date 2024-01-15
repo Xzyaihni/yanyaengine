@@ -328,10 +328,8 @@ impl CharsRasterizer
             total_height as usize
         );
 
-        (ASCII_START..=ASCII_END).enumerate().for_each(|(i, c)|
+        (ASCII_START..=ASCII_END).map(char::from).enumerate().for_each(|(i, c)|
         {
-            let c = char::from_u32(c as u32).expect("char must be in valid ascii range");
-
             let glyph_image = self.glyph_image(c)
                 .expect("default font must contain all ascii characters");
 
@@ -365,7 +363,7 @@ impl CharsRasterizer
             Ok(id) => id,
             Err(err) =>
             {
-                eprintln!("couldnt get the advance of {c} ({err:?}), returning {DEFAULT_ADVANCE}");
+                eprintln!("couldnt get the advance of {c} ({err}), returning {DEFAULT_ADVANCE}");
                 return DEFAULT_ADVANCE
             }
         };
