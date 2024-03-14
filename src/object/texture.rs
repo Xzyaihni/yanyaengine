@@ -233,7 +233,7 @@ impl Texture
             resource_uploader.allocator.clone(),
             ImageCreateInfo{
                 image_type: ImageType::Dim2d,
-                format: Format::R8G8B8A8_SRGB,
+                format: Format::R8G8B8A8_UNORM,
                 extent: [image.width, image.height, 1],
                 usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
                 ..Default::default()
