@@ -252,6 +252,7 @@ impl IntoIterator for ShadersContainer
     }
 }
 
+#[allow(dead_code)]
 pub struct ShaderId(usize);
 
 impl ShadersContainer
