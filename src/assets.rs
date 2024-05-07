@@ -3,13 +3,16 @@ use std::{
     fmt,
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::Arc
+    sync::Arc,
+    ops::{Index, IndexMut}
 };
 
 use parking_lot::RwLock;
 
 use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use strum_macros::{EnumIter, IntoStaticStr};
+
+use serde::{Serialize, Deserialize};
 
 use crate::{
     PipelineInfo,
@@ -21,7 +24,7 @@ use crate::{
 };
 
 
-#[derive(EnumIter)]
+#[derive(EnumIter, IntoStaticStr)]
 pub enum DefaultModel
 {
     Square
@@ -102,11 +105,142 @@ impl FilesLoader
 	}
 }
 
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TextureId(usize);
+
+impl From<usize> for TextureId
+{
+    fn from(value: usize) -> Self
+    {
+        Self(value)
+    }
+}
+
+impl Into<usize> for TextureId
+{
+    fn into(self) -> usize
+    {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ModelId(usize);
+
+impl From<usize> for ModelId
+{
+    fn from(value: usize) -> Self
+    {
+        Self(value)
+    }
+}
+
+impl Into<usize> for ModelId
+{
+    fn into(self) -> usize
+    {
+        self.0
+    }
+}
+
+struct IdsStorage<I, T>
+{
+    ids: HashMap<String, I>,
+    data: Vec<T>
+}
+
+impl<I, T> FromIterator<(String, T)> for IdsStorage<I, T>
+where
+    I: From<usize> + Clone
+{
+    fn from_iter<Iter>(iter: Iter) -> Self
+    where
+        Iter: IntoIterator<Item=(String, T)>
+    {
+        let mut this = Self::default();
+
+        this.extend(iter);
+
+        this
+    }
+}
+
+impl<I, T> Extend<(String, T)> for IdsStorage<I, T>
+where
+    I: From<usize> + Clone
+{
+    fn extend<Iter>(&mut self, iter: Iter)
+    where
+        Iter: IntoIterator<Item=(String, T)>
+    {
+        iter.into_iter().for_each(|item| { self.insert(item); });
+    }
+}
+
+impl<I, T> Default for IdsStorage<I, T>
+{
+    fn default() -> Self
+    {
+        Self{ids: HashMap::new(), data: Vec::new()}
+    }
+}
+
+impl<I, T> IdsStorage<I, T>
+{
+    pub fn insert(&mut self, item: (String, T)) -> I
+    where
+        I: From<usize> + Clone
+    {
+        let id: I = self.data.len().into();
+
+        self.ids.insert(item.0, id.clone());
+        self.data.push(item.1);
+
+        id
+    }
+
+    pub fn get_id(&self, name: &str) -> &I
+    {
+        self.ids.get(name).unwrap_or_else(|| panic!("asset named `{name}` doesnt exist"))
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item=&String>
+    {
+        self.ids.keys()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut T>
+    {
+        self.data.iter_mut()
+    }
+}
+
+impl<I, T> Index<I> for IdsStorage<I, T>
+where
+    I: Into<usize>
+{
+    type Output = T;
+
+    fn index(&self, index: I) -> &Self::Output
+    {
+        &self.data[index.into()]
+    }
+}
+
+impl<I, T> IndexMut<I> for IdsStorage<I, T>
+where
+    I: Into<usize>
+{
+    fn index_mut(&mut self, index: I) -> &mut Self::Output
+    {
+        &mut self.data[index.into()]
+    }
+}
+
 pub struct Assets
 {
-	textures: HashMap<String, Arc<RwLock<Texture>>>,
-	models: HashMap<String, Arc<RwLock<Model>>>,
-    default_models: Vec<Arc<RwLock<Model>>>
+    textures: IdsStorage<TextureId, Arc<RwLock<Texture>>>,
+	models: IdsStorage<ModelId, Arc<RwLock<Model>>>
 }
 
 impl Assets
@@ -128,7 +262,7 @@ impl Assets
             })
         });
 
-        let models = Self::load_resource(models_path, |path|
+        let mut models = Self::load_resource(models_path, |path|
         {
             FilesLoader::load(path).map(|named_value|
             {
@@ -136,13 +270,14 @@ impl Assets
             })
         });
 
-        let default_models = Self::create_default_models();
+        models.extend(Self::create_default_models());
 
-        Self{textures, models, default_models}
+        Self{textures, models}
     }
 
-    fn load_resource<T, F, I, P>(maybe_path: Option<P>, f: F) -> HashMap<String, Arc<RwLock<T>>>
+    fn load_resource<Id, T, F, I, P>(maybe_path: Option<P>, f: F) -> IdsStorage<Id, Arc<RwLock<T>>>
     where
+        Id: From<usize> + Clone,
         P: AsRef<Path>,
         I: Iterator<Item=NamedValue<T>>,
         F: FnOnce(P) -> I
@@ -156,25 +291,29 @@ impl Assets
         }).unwrap_or_default()
     }
 
-    pub fn default_model(&self, id: DefaultModel) -> Arc<RwLock<Model>>
+    pub fn default_model(&self, id: DefaultModel) -> ModelId
     {
-        self.default_models[id as usize].clone()
+        self.model_id(id.into())
     }
 
-    pub fn texture(&self, name: &str) -> Arc<RwLock<Texture>>
+    pub fn texture_id(&self, name: &str) -> TextureId
     {
-        self.textures.get(name).unwrap_or_else(||
-        {
-            panic!("no texture named '{}' found", name)
-        }).clone()
+        *self.textures.get_id(name)
     }
 
-    pub fn model(&self, name: &str) -> Arc<RwLock<Model>>
+    pub fn texture(&self, id: TextureId) -> Arc<RwLock<Texture>>
     {
-        self.models.get(name).unwrap_or_else(||
-        {
-            panic!("no model named '{}' found", name)
-        }).clone()
+        self.textures[id].clone()
+    }
+
+    pub fn model_id(&self, name: &str) -> ModelId
+    {
+        *self.models.get_id(name)
+    }
+
+    pub fn model(&self, id: ModelId) -> Arc<RwLock<Model>>
+    {
+        self.models[id].clone()
     }
 
     pub fn add_textures<T>(&mut self, textures: T)
@@ -191,7 +330,7 @@ impl Assets
         Self::add_assets(models.into_iter(), &mut self.models);
     }
 
-    fn create_default_models() -> Vec<Arc<RwLock<Model>>>
+    fn create_default_models() -> impl Iterator<Item=(String, Arc<RwLock<Model>>)>
     {
         DefaultModel::iter().map(|default_model|
         {
@@ -203,28 +342,30 @@ impl Assets
                 }
             };
 
-            Arc::new(RwLock::new(model))
-        }).collect()
+            let name: &str = default_model.into();
+            (name.to_owned(), Arc::new(RwLock::new(model)))
+        })
     }
 
-    fn add_assets<AddAssetsType, T>(
+    fn add_assets<AddAssetsType, I, T>(
         add_assets: AddAssetsType,
-        assets: &mut HashMap<String, Arc<RwLock<T>>>
+        assets: &mut IdsStorage<I, Arc<RwLock<T>>>
     )
     where
+        I: From<usize> + Clone,
         AddAssetsType: Iterator<Item=(String, T)>
     {
         let insert_assets = add_assets.map(|(name, asset)|
         {
             (name, Arc::new(RwLock::new(asset)))
-        }).collect::<Vec<_>>();
+        });
 
         assets.extend(insert_assets);
     }
 
 	pub fn swap_pipeline(&mut self, info: &PipelineInfo)
 	{
-		self.textures.iter_mut().for_each(|(_name, texture)|
+		self.textures.iter_mut().for_each(|texture|
 		{
 			texture.write().swap_pipeline(info)
 		});
