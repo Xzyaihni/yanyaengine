@@ -301,9 +301,14 @@ impl Assets
         *self.textures.get_id(name)
     }
 
-    pub fn texture(&self, id: TextureId) -> Arc<RwLock<Texture>>
+    pub fn texture_by_name(&self, name: &str) -> &Arc<RwLock<Texture>>
     {
-        self.textures[id].clone()
+        &self.textures[*self.textures.get_id(name)]
+    }
+
+    pub fn texture(&self, id: TextureId) -> &Arc<RwLock<Texture>>
+    {
+        &self.textures[id]
     }
 
     pub fn model_id(&self, name: &str) -> ModelId
@@ -311,9 +316,14 @@ impl Assets
         *self.models.get_id(name)
     }
 
-    pub fn model(&self, id: ModelId) -> Arc<RwLock<Model>>
+    pub fn model_by_name(&self, name: &str) -> &Arc<RwLock<Model>>
     {
-        self.models[id].clone()
+        &self.models[*self.models.get_id(name)]
+    }
+
+    pub fn model(&self, id: ModelId) -> &Arc<RwLock<Model>>
+    {
+        &self.models[id]
     }
 
     pub fn add_textures<T>(&mut self, textures: T)
