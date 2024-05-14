@@ -123,6 +123,11 @@ impl Object
     {
         self.transform.set_origin(origin);
     }
+
+    pub fn set_texture(&mut self, texture: Arc<RwLock<Texture>>)
+    {
+        self.texture = texture;
+    }
 }
 
 impl GameObject for Object
