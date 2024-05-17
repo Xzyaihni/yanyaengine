@@ -5,6 +5,7 @@ use std::{
 
 use nalgebra::{
     Point3,
+    Vector2,
     Vector3,
     geometry::Orthographic3,
     Matrix4
@@ -21,7 +22,7 @@ pub struct Camera
     projection: Matrix4<f32>,
     view: CameraTransform,
     projection_view: Matrix4<f32>,
-    size: (f32, f32),
+    size: Vector2<f32>,
     z_planes: Range<f32>
 }
 
@@ -39,31 +40,32 @@ impl Camera
         Self{projection, view, projection_view, size, z_planes}
     }
 
-    fn aspect_size(aspect: f32) -> (f32, f32)
+    fn aspect_size(aspect: f32) -> Vector2<f32>
     {
         if aspect < 1.0
         {
-            (1.0, 1.0 + (1.0 - aspect))
+            Vector2::new(aspect, 1.0)
         } else
         {
-            (aspect, 1.0)
+            Vector2::new(1.0, aspect.recip())
         }
     }
 
-    fn create_projection(size: (f32, f32), z_planes: &Range<f32>) -> Matrix4<f32>
+    fn create_projection(size: Vector2<f32>, z_planes: &Range<f32>) -> Matrix4<f32>
     {
         let identity = Matrix4::identity();
         let mut projection = Orthographic3::from_matrix_unchecked(identity);
 
-        projection.set_left_and_right(-size.0 / 2.0, size.0 / 2.0);
-        projection.set_bottom_and_top(-size.1 / 2.0, size.1 / 2.0);
+        let size = size / 2.0;
+        projection.set_left_and_right(-size.x, size.x);
+        projection.set_bottom_and_top(-size.y, size.y);
 
         projection.set_znear_and_zfar(z_planes.start, z_planes.end);
 
         projection.to_homogeneous()
     }
 
-    fn recreate_projection(&mut self, size: (f32, f32))
+    fn recreate_projection(&mut self, size: Vector2<f32>)
     {
         self.size = size;
 
@@ -139,19 +141,31 @@ impl Camera
     pub fn rescale(&mut self, scale: f32)
     {
         //this one actually scales the view
-        let size = self.normalized_aspect();
-        self.recreate_projection((size.0 * scale, size.1 * scale));
+        let size = self.normalized_size();
+        self.recreate_projection(size * scale);
     }
 
-    pub fn aspect(&self) -> (f32, f32)
+    pub fn aspect(&self) -> f32
+    {
+        self.size.x / self.size.y
+    }
+
+    pub fn size(&self) -> Vector2<f32>
     {
         self.size
     }
 
-    pub fn normalized_aspect(&self) -> (f32, f32)
+    pub fn over_size(&self) -> Vector2<f32>
     {
-        let lowest = self.size.0.min(self.size.1);
+        let lowest = self.size.x.min(self.size.y);
 
-        (self.size.0 / lowest, self.size.1 / lowest)
+        self.size / lowest
+    }
+
+    pub fn normalized_size(&self) -> Vector2<f32>
+    {
+        let highest = self.size.x.max(self.size.y);
+
+        self.size / highest
     }
 }
