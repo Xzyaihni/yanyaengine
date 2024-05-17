@@ -79,7 +79,7 @@ pub mod camera;
 pub mod transform;
 
 mod object_factory;
-mod text_factory;
+pub mod text_factory;
 pub mod assets;
 pub mod engine;
 pub mod text_object;
