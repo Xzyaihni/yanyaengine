@@ -128,12 +128,22 @@ impl Object
     {
         self.texture = texture;
     }
+
+    fn needs_draw(&self) -> bool
+    {
+        !self.model.read().vertices.is_empty()
+    }
 }
 
 impl GameObject for Object
 {
     fn update_buffers(&mut self, info: &mut UpdateBuffersInfo)
     {
+        if !self.needs_draw()
+        {
+            return;
+        }
+
         info.object_info.partial.builder_wrapper.builder()
             .update_buffer(
                 self.subbuffers[info.object_info.partial.image_index].clone(),
@@ -143,6 +153,11 @@ impl GameObject for Object
 
     fn draw(&self, info: &mut DrawInfo)
     {
+        if !self.needs_draw()
+        {
+            return;
+        }
+
         let size = self.model.read().vertices.len() as u32;
 
         info.object_info.builder_wrapper.builder()
