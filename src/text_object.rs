@@ -117,7 +117,8 @@ pub struct GlyphInfo
 
 pub struct TextObject
 {
-    pub object: Option<Object>
+    pub object: Option<Object>,
+    pub aspect: f32
 }
 
 impl TextObject
@@ -153,7 +154,8 @@ impl TextObject
         if width == 0 || height == 0
         {
             return Self{
-                object: None
+                object: None,
+                aspect: 1.0
             };
         }
 
@@ -191,7 +193,7 @@ impl TextObject
             transform: info.transform
         });
 
-        Self{object: Some(object)}
+        Self{object: Some(object), aspect}
     }
 
     fn canvas_to_texture(
