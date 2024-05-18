@@ -63,6 +63,7 @@ impl<'a> FontsPicker<'a>
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct BoundsInfo
 {
@@ -95,7 +96,7 @@ impl BoundsCalculator
 
     pub fn process_character(&mut self, info: BoundsInfo) -> i32
     {
-        self.width = self.x + info.origin.x + info.advance;
+        self.width = self.x + info.origin.x + info.width as i32;
         self.height = self.height.max(info.origin.y + info.height as i32);
 
         let this_x = self.x + info.origin.x;
@@ -358,22 +359,75 @@ impl CharsRasterizer
         c: char
     ) -> Option<()>
     {
+        let small = self.render_small(font_size, canvas.size.y(), c)?;
+
+        let start_x = char_x.max(0) as usize;
+
+        let big_width = canvas.size.x() as usize;
+
+        let width = small.size.x() as usize;
+        let height = small.size.y() as usize;
+
+        for y in 0..height
+        {
+            for x in 0..width
+            {
+                let offset_x = start_x + x;
+                if offset_x >= big_width
+                {
+                    continue;
+                }
+
+                let small_y = y * width;
+                let big_y = y * big_width as usize;
+
+                let this_pixel = &mut canvas.pixels[big_y + offset_x];
+                *this_pixel = this_pixel.saturating_add(small.pixels[small_y + x]);
+            }
+        }
+
+        Some(())
+    }
+
+    fn render_small(
+        &self,
+        font_size: u32,
+        canvas_height: i32,
+        c: char
+    ) -> Option<Canvas>
+    {
         let id = self.font.glyph_for_char(c)?;
 
         let point_size = font_size as f32;
 
+        let hinting = HintingOptions::Full(point_size);
+        let options = RasterizationOptions::GrayscaleAa;
+
+        let bounds = self.font.raster_bounds(
+            id,
+            point_size,
+            Transform2F::from_translation(Vector2F::new(0.0, 0.0)),
+            hinting,
+            options
+        ).ok()?;
+
+        let mut canvas = Canvas::new(Vector2I::new(font_size as i32, canvas_height), Format::A8);
+
+        let origin = bounds.origin();
         let offset = Vector2F::new(
-            char_x as f32,
-            point_size
+            -origin.x() as f32,
+            font_size as f32
         );
 
         self.font.rasterize_glyph(
-            canvas,
+            &mut canvas,
             id,
             point_size,
             Transform2F::from_translation(offset),
-            HintingOptions::None,
-            RasterizationOptions::GrayscaleAa
-        ).ok()
+            hinting,
+            options
+        ).ok()?;
+
+        Some(canvas)
     }
 }
