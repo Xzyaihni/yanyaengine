@@ -47,6 +47,49 @@ impl Color
     {
         Self{r, g, b, a}
     }
+
+    pub fn blend(self, other: Self) -> Self
+    {
+        if self.a == 0
+        {
+            return other;
+        } else if other.a == 0
+        {
+            return self;
+        }
+
+        let to_f = |x|
+        {
+            x as f32 / 255.0
+        };
+
+        let from_f = |x|
+        {
+            (x * 255.0) as u8
+        };
+
+        // or u could express this as lerp(self.alpha, 1.0, other.alpha)
+        let alpha = (to_f(other.a) + to_f(self.a) * (1.0 - to_f(other.a))).clamp(0.0, 1.0);
+
+        fn lerp(a: f32, b: f32, t: f32) -> f32
+        {
+            a * (1.0 - t) + b * t
+        }
+
+        let mix = |a, b|
+        {
+            let mixed = lerp(to_f(a) * to_f(self.a), to_f(b), to_f(other.a)) / alpha;
+
+            from_f(mixed)
+        };
+
+        Self{
+            r: mix(self.r, other.r),
+            g: mix(self.g, other.g),
+            b: mix(self.b, other.b),
+            a: from_f(alpha)
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +136,29 @@ impl SimpleImage
         self.colors[index] = color;
     }
 
+    pub fn maybe_set_pixel(&mut self, color: Color, x: usize, y: usize)
+    {
+        if x >= self.width || y >= self.height
+        {
+            return;
+        }
+
+        let index = self.index_of(x, y);
+        self.colors[index] = color;
+    }
+
+    pub fn maybe_blend_pixel(&mut self, color: Color, x: usize, y: usize)
+    {
+        if x >= self.width || y >= self.height
+        {
+            return;
+        }
+
+        let index = self.index_of(x, y);
+
+        self.colors[index] = self.colors[index].blend(color);
+    }
+
     pub fn blit(&mut self, other: &Self, origin_x: usize, origin_y: usize)
     {
         for y in 0..other.height
@@ -101,7 +167,7 @@ impl SimpleImage
             {
                 let other_pixel = other.get_pixel(x, y);
 
-                self.set_pixel(other_pixel, origin_x + x, origin_y + y);
+                self.maybe_blend_pixel(other_pixel, origin_x + x, origin_y + y);
             }
         }
     }

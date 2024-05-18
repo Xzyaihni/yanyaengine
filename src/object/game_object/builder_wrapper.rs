@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use super::CommandBuilderType;
 
 use crate::{
     TextInfo,
     TextObject,
+    ObjectFactory,
     object::resource_uploader::ResourceUploader,
     text_factory::{FontsContainer, TextFactory}
 };
@@ -11,6 +14,7 @@ use crate::{
 pub struct BuilderWrapper<'a>
 {
     resource_uploader: ResourceUploader<'a>,
+    object_factory: Arc<ObjectFactory>,
     fonts_info: &'a mut FontsContainer
 }
 
@@ -18,10 +22,11 @@ impl<'a> BuilderWrapper<'a>
 {
     pub fn new(
         resource_uploader: ResourceUploader<'a>,
+        object_factory: Arc<ObjectFactory>,
         fonts_info: &'a mut FontsContainer
     ) -> Self
     {
-        Self{resource_uploader, fonts_info}
+        Self{resource_uploader, object_factory, fonts_info}
     }
 
     pub fn resource_uploader<'b>(&'b mut self) -> &'b mut ResourceUploader<'a>
@@ -38,7 +43,11 @@ impl<'a> BuilderWrapper<'a>
     where
         'a: 'b
     {
-        TextFactory::new(&mut self.resource_uploader, self.fonts_info)
+        TextFactory::new(
+            &mut self.resource_uploader,
+            self.object_factory.clone(),
+            self.fonts_info
+        )
     }
 
     pub fn create_text(&mut self, info: TextInfo) -> TextObject

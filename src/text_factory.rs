@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use nalgebra::Matrix4;
-
 use font_kit::{
     font::Font,
     source::SystemSource,
@@ -13,22 +11,19 @@ use crate::{
     ObjectFactory,
     TextObject,
     transform::Transform,
-    text_object::CharsCreator,
+    text_object::CharsRasterizer,
     object::resource_uploader::ResourceUploader
 };
 
 
 pub struct FontsContainer
 {
-    font_textures: Vec<CharsCreator>
+    font_textures: Vec<CharsRasterizer>
 }
 
 impl FontsContainer
 {
-    pub fn new(
-        resource_uploader: &mut ResourceUploader,
-        object_factory: Arc<ObjectFactory>
-    ) -> Self
+    pub fn new() -> Self
     {
         let default_font = SystemSource::new()
             .select_best_match(&[FamilyName::SansSerif], &Properties::new())
@@ -36,18 +31,14 @@ impl FontsContainer
             .load()
             .unwrap();
 
-        Self::from_fonts(resource_uploader, object_factory, vec![default_font].into_iter())
+        Self::from_fonts(vec![default_font].into_iter())
     }
 
-    fn from_fonts(
-        resource_uploader: &mut ResourceUploader,
-        object_factory: Arc<ObjectFactory>,
-        fonts: impl Iterator<Item=Font>
-    ) -> Self
+    fn from_fonts(fonts: impl Iterator<Item=Font>) -> Self
     {
         let font_textures = fonts.map(|font|
         {
-            CharsCreator::new(resource_uploader, object_factory.clone(), font)
+            CharsRasterizer::new(font)
         }).collect();
 
         Self{font_textures}
@@ -58,7 +49,7 @@ impl FontsContainer
         self.font_textures.len()
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut CharsCreator>
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut CharsRasterizer>
     {
         self.font_textures.get_mut(index)
     }
@@ -67,13 +58,14 @@ impl FontsContainer
 pub struct TextInfo<'a>
 {
     pub transform: Transform,
-    pub projection_view: Matrix4<f32>,
+    pub font_size: u32,
     pub text: &'a str
 }
 
 pub struct TextFactory<'a, 'b: 'a>
 {
     resource_uploader: &'a mut ResourceUploader<'b>,
+    object_factory: Arc<ObjectFactory>,
     fonts_container: &'a mut FontsContainer
 }
 
@@ -81,16 +73,18 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
 {
     pub fn new(
         resource_uploader: &'a mut ResourceUploader<'b>,
+        object_factory: Arc<ObjectFactory>,
         fonts_container: &'a mut FontsContainer
     ) -> Self
     {
-        Self{resource_uploader, fonts_container}
+        Self{resource_uploader, object_factory, fonts_container}
     }
 
     pub fn create(&mut self, info: TextInfo) -> TextObject
     {
         TextObject::new(
             self.resource_uploader,
+            &self.object_factory,
             info,
             self.fonts_container
         )

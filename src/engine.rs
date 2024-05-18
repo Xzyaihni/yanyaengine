@@ -45,7 +45,7 @@ impl Engine
         let object_factory = ObjectFactory::new(allocator);
         let object_factory = Arc::new(object_factory);
 
-        let fonts_info = FontsContainer::new(&mut resource_uploader, object_factory.clone());
+        let fonts_info = FontsContainer::new();
 
         Self{fonts_info, object_factory, assets}
     }
@@ -57,7 +57,11 @@ impl Engine
         image_index: usize
     ) -> ObjectCreatePartialInfo<'a>
     {
-        let builder_wrapper = BuilderWrapper::new(resource_uploader, &mut self.fonts_info);
+        let builder_wrapper = BuilderWrapper::new(
+            resource_uploader,
+            self.object_factory.clone(),
+            &mut self.fonts_info
+        );
 
         ObjectCreatePartialInfo{
             builder_wrapper,

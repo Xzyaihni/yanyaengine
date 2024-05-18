@@ -22,6 +22,8 @@ pub struct Camera
     projection: Matrix4<f32>,
     view: CameraTransform,
     projection_view: Matrix4<f32>,
+    aspect: f32,
+    scale: f32,
     size: Vector2<f32>,
     z_planes: Range<f32>
 }
@@ -37,7 +39,15 @@ impl Camera
 
         let projection_view = Self::create_projection_view(projection, view.matrix());
 
-        Self{projection, view, projection_view, size, z_planes}
+        Self{
+            projection,
+            view,
+            projection_view,
+            aspect,
+            scale: 1.0,
+            size,
+            z_planes
+        }
     }
 
     fn aspect_size(aspect: f32) -> Vector2<f32>
@@ -134,15 +144,18 @@ impl Camera
 
     pub fn resize(&mut self, aspect: f32)
     {
+        self.aspect = aspect;
+
         //this one just changes the aspect ratio
-        self.recreate_projection(Self::aspect_size(aspect));
+        self.recreate_projection(Self::aspect_size(aspect) * self.scale);
     }
 
     pub fn rescale(&mut self, scale: f32)
     {
+        self.scale = scale;
+
         //this one actually scales the view
-        let size = self.normalized_size();
-        self.recreate_projection(size * scale);
+        self.resize(self.aspect);
     }
 
     pub fn aspect(&self) -> f32
