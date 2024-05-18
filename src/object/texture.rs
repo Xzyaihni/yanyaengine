@@ -161,13 +161,31 @@ impl SimpleImage
 
     pub fn blit(&mut self, other: &Self, origin_x: usize, origin_y: usize)
     {
+        self.blit_inner(other, origin_x, origin_y, |this, p, x, y|
+        {
+            this.maybe_set_pixel(p, x, y);
+        });
+    }
+
+    pub fn blit_blend(&mut self, other: &Self, origin_x: usize, origin_y: usize)
+    {
+        self.blit_inner(other, origin_x, origin_y, |this, p, x, y|
+        {
+            this.maybe_blend_pixel(p, x, y);
+        });
+    }
+
+    fn blit_inner<F>(&mut self, other: &Self, origin_x: usize, origin_y: usize, mut op: F)
+    where
+        F: FnMut(&mut Self, Color, usize, usize)
+    {
         for y in 0..other.height
         {
             for x in 0..other.width
             {
                 let other_pixel = other.get_pixel(x, y);
 
-                self.maybe_blend_pixel(other_pixel, origin_x + x, origin_y + y);
+                op(self, other_pixel, origin_x + x, origin_y + y);
             }
         }
     }
