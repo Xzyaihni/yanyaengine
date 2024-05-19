@@ -124,6 +124,11 @@ impl Object
         self.transform.set_origin(origin);
     }
 
+    pub fn set_inplace_model(&mut self, model: Model)
+    {
+        *self.model.write() = model;
+    }
+
     pub fn set_texture(&mut self, texture: Arc<RwLock<Texture>>)
     {
         self.texture = texture;

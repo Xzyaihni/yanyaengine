@@ -13,6 +13,8 @@ use pathfinder_geometry::{
     vector::{Vector2I, Vector2F}
 };
 
+use nalgebra::Vector2;
+
 use crate::{
     Object,
     ObjectFactory,
@@ -179,21 +181,47 @@ impl TextObject
             }
         });
 
-        let (x, y) = if aspect < 1.0
-        {
-            (aspect, 1.0)
-        } else
-        {
-            (1.0, aspect.recip())
-        };
-
         let object = object_factory.create(ObjectInfo{
-            model: Arc::new(RwLock::new(Model::rectangle(x, y))),
+            model: Arc::new(RwLock::new(Model::square(1.0))),
             texture: Self::canvas_to_texture(resource_uploader, text_canvas),
             transform: info.transform
         });
 
-        Self{object: Some(object), aspect}
+        let mut this = Self{object: Some(object), aspect};
+
+        this.update_scale();
+
+        this
+    }
+
+    pub fn update_scale(&mut self)
+    {
+        if let Some(object) = self.object.as_mut()
+        {
+            let from_aspect = |aspect: f32|
+            {
+                if aspect < 1.0
+                {
+                    Vector2::new(aspect, 1.0)
+                } else
+                {
+                    Vector2::new(1.0, aspect.recip())
+                }
+            };
+
+            let mut model_size = from_aspect(self.aspect);
+
+            let scale = object.scale();
+
+            let v = scale.y / scale.x;
+
+            model_size.x *= v;
+
+            let new_aspect = model_size.x / model_size.y;
+            let model_size = from_aspect(new_aspect);
+
+            object.set_inplace_model(Model::rectangle(model_size.x, model_size.y));
+        }
     }
 
     fn canvas_to_texture(
@@ -402,7 +430,7 @@ impl CharsRasterizer
 
         let point_size = font_size as f32;
 
-        let hinting = HintingOptions::Full(point_size);
+        let hinting = HintingOptions::None;
         let options = RasterizationOptions::GrayscaleAa;
 
         let bounds = self.font.raster_bounds(
