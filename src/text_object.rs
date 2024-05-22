@@ -3,6 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use font_kit::{
+    metrics::Metrics,
     hinting::HintingOptions,
     font::Font,
     canvas::{RasterizationOptions, Format, Canvas}
@@ -79,7 +80,6 @@ struct BoundsInfo
 struct BoundsCalculator
 {
     width: i32,
-    height: i32,
     x: i32,
     y: u32
 }
@@ -90,7 +90,6 @@ impl BoundsCalculator
     {
         Self{
             width: 0,
-            height: 0,
             x: 0,
             y: 0
         }
@@ -99,7 +98,6 @@ impl BoundsCalculator
     pub fn process_character(&mut self, info: BoundsInfo) -> i32
     {
         self.width = self.x + info.origin.x + info.width as i32;
-        self.height = self.height.max(info.origin.y + info.height as i32);
 
         let this_x = self.x + info.origin.x;
 
@@ -148,10 +146,14 @@ impl TextObject
             ).0
         }).collect();
 
-        let aspect = full_bounds.width as f32 / full_bounds.height as f32;
+        let metrics = current_font.metrics();
+
+        let height_font = metrics.ascent + metrics.descent.abs();
+
+        let height = (height_font / info.font_size as f32).round() as i32;
+        let aspect = full_bounds.width as f32 / height as f32;
 
         let width = full_bounds.width;
-        let height = full_bounds.height;
 
         if width == 0 || height == 0
         {
@@ -308,6 +310,16 @@ impl CharsRasterizer
         Self{font}
     }
 
+    pub fn metrics(&self) -> Metrics
+    {
+        self.font.metrics()
+    }
+
+    pub fn units_per_em(&self) -> f32
+    {
+        self.metrics().units_per_em as f32
+    }
+
     pub fn advance(&self, c: char) -> f32
     {
         const DEFAULT_ADVANCE: f32 = 0.0;
@@ -322,8 +334,6 @@ impl CharsRasterizer
             }
         };
         
-        let units_per_em = self.font.metrics().units_per_em;
-
         let advance = match self.font.advance(id)
         {
             Ok(id) => id,
@@ -334,7 +344,7 @@ impl CharsRasterizer
             }
         };
 
-        advance.x() / units_per_em as f32
+        advance.x() / self.units_per_em()
     }
 
     fn glyph_info(
