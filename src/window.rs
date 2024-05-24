@@ -633,6 +633,12 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                     }
 
                     let (width, height): (f64, f64) = info.render_info.surface_size().into();
+
+                    if width == 0.0 || height == 0.0
+                    {
+                        return;
+                    }
+
                     let position = (position.x / width, position.y / height);
 
                     info.user_app.as_mut().unwrap().mouse_move(position);
@@ -686,6 +692,13 @@ fn handle_event<UserApp: YanyaApp + 'static>(
         },
         Event::AboutToWait =>
         {
+            let [x, y]: [u32; 2] = info.render_info.surface_size().into();
+
+            if x == 0 || y == 0
+            {
+                return;
+            }
+
             handle_redraw(info);
         },
         _ => ()

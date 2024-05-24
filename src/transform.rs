@@ -77,6 +77,13 @@ impl Transform
 	{
 		(value1 - value0).magnitude()
 	}
+
+    pub fn max_scale(&self) -> f32
+    {
+        let scale = self.scale;
+
+        scale.x.max(scale.y.max(scale.z))
+    }
 }
 
 pub trait OnTransformCallback
