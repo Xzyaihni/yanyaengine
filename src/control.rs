@@ -4,7 +4,7 @@ use winit::{
 };
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Control
 {
     Keyboard{keycode: PhysicalKey, state: ElementState},
