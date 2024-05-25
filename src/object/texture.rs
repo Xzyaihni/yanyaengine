@@ -1,7 +1,6 @@
 use std::{
     fmt,
     path::Path,
-    ops::Deref,
     sync::Arc
 };
 
@@ -273,7 +272,6 @@ impl fmt::Debug for RgbaImage
 #[derive(Clone)]
 pub struct Texture
 {
-    image: RgbaImage,
     view: Arc<ImageView>,
     descriptor_set: Arc<PersistentDescriptorSet>
 }
@@ -291,7 +289,7 @@ impl Texture
             &resource_uploader.pipeline_info
         );
 
-        Self{image, view, descriptor_set}
+        Self{view, descriptor_set}
     }
 
     fn calculate_descriptor_set(
@@ -361,22 +359,11 @@ impl Texture
     }
 }
 
-impl Deref for Texture
-{
-    type Target = RgbaImage;
-
-    fn deref(&self) -> &Self::Target
-    {
-        &self.image
-    }
-}
-
 impl fmt::Debug for Texture
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
     {
         f.debug_struct("Texture")
-            .field("image", &self.image)
             .finish()
     }
 }
