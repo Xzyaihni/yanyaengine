@@ -330,6 +330,11 @@ impl Texture
         ImageView::new_default(image).unwrap()
     }
 
+    pub fn image(&self) -> &Arc<Image>
+    {
+        self.view.image()
+    }
+
     pub fn swap_pipeline(&mut self, info: &PipelineInfo)
     {
         self.descriptor_set = Self::calculate_persistent_set(self.view.clone(), info);

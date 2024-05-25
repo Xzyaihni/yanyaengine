@@ -749,7 +749,16 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp
             {
                 None
             },
-            Err(e) => panic!("error getting next image >-< ({e})")
+            Err(e) =>
+            {
+                let e = match e
+                {
+                    Validated::Error(x) => format!("{x}"),
+                    Validated::ValidationError(x) => format!("error validating {x}")
+                };
+
+                panic!("error getting next image: ({e})")
+            }
         };
 
     if let Some((image_index, suboptimal, acquire_future)) = acquired
@@ -902,7 +911,7 @@ fn run_frame<UserApp: YanyaApp>(
 
         let draw_info = DrawInfo{
             object_info: object_create_info,
-            layout: frame_info.layout
+            layout: frame_info.layout.clone()
         };
 
         user_app.draw(draw_info);
@@ -967,7 +976,14 @@ fn execute_builder(
         },
         Err(e) =>
         {
-            eprintln!("error flushing future ;; ({e})");
+            let e = match e
+            {
+                Validated::Error(x) => format!("{x}"),
+                Validated::ValidationError(x) => format!("error validating {x}")
+            };
+
+            eprintln!("error flushing future: {e}");
+
             None
         }
     };
