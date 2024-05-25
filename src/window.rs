@@ -19,6 +19,7 @@ use vulkano::{
         PipelineLayout,
         GraphicsPipeline,
         PipelineShaderStageCreateInfo,
+        DynamicState,
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
@@ -26,7 +27,7 @@ use vulkano::{
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
             vertex_input::{VertexDefinition, Vertex},
-            viewport::{Viewport, ViewportState}
+            viewport::{Scissor, Viewport, ViewportState}
         }
     },
     image::{
@@ -341,6 +342,9 @@ impl RenderInfo
         device: Arc<Device>
     ) -> PipelineInfoRaw
     {
+        let mut dynamic_state = ahash::HashSet::default();
+        dynamic_state.insert(DynamicState::Scissor);
+
         let pipeline = GraphicsPipeline::new(
             device,
             None,
@@ -370,6 +374,7 @@ impl RenderInfo
                         ..Default::default()
                     }
                 )),
+                dynamic_state,
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(shader.layout.clone())
             }
@@ -455,11 +460,16 @@ impl RenderInfo
         Ok(())
     }
 
+    pub fn size(&self) -> [f32; 2]
+    {
+        self.surface_size().into()
+    }
+
     pub fn aspect(&self) -> f32
     {
-        let size: [f32; 2] = self.surface_size().into();
+        let [x, y] = self.size();
 
-        size[0] / size[1]
+        x / y
     }
 
     pub fn surface_size(&self) -> PhysicalSize<u32>
@@ -741,6 +751,8 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp
         CommandBufferUsage::OneTimeSubmit
     ).unwrap();
 
+    builder.set_scissor(0, vec![Scissor::default()].into()).unwrap();
+
     let acquired =
         match swapchain::acquire_next_image(info.render_info.swapchain.clone(), None)
         {
@@ -777,14 +789,12 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp
             ));
 
             info.user_app = {
-                let aspect = info.render_info.aspect();
-
                 let init_info = info.engine
                     .as_mut()
                     .unwrap()
                     .init_partial_info(
                         info.render_info.resource_uploader(&mut builder, info.pipeline_index),
-                        aspect,
+                        info.render_info.size(),
                         image_index
                     );
 
@@ -861,12 +871,11 @@ fn run_frame<UserApp: YanyaApp>(
     // and ill change this one later too
     let pipeline_index = 0;
 
-    let aspect = frame_info.render_info.aspect();
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
                 frame_info.render_info.resource_uploader(&mut frame_info.builder, pipeline_index),
-                aspect,
+                frame_info.render_info.size(),
                 frame_info.image_index
             );
 
@@ -883,29 +892,30 @@ fn run_frame<UserApp: YanyaApp>(
         vec![clear_color, None]
     };
 
-    frame_info.builder.begin_render_pass(
-        RenderPassBeginInfo{
-            clear_values,
-            ..RenderPassBeginInfo::framebuffer(
-                frame_info.render_info.framebuffers[frame_info.image_index].clone()
-            )
-        },
-        SubpassBeginInfo{
-            contents: SubpassContents::Inline,
-            ..Default::default()
-        }
-    )
-    .unwrap()
-    .bind_pipeline_graphics(
-        frame_info.render_info.pipelines[pipeline_index].pipeline.clone()
-    )
-    .unwrap();
+    frame_info.builder
+        .begin_render_pass(
+            RenderPassBeginInfo{
+                clear_values,
+                ..RenderPassBeginInfo::framebuffer(
+                    frame_info.render_info.framebuffers[frame_info.image_index].clone()
+                )
+            },
+            SubpassBeginInfo{
+                contents: SubpassContents::Inline,
+                ..Default::default()
+            }
+        )
+        .unwrap()
+        .bind_pipeline_graphics(
+            frame_info.render_info.pipelines[pipeline_index].pipeline.clone()
+        )
+        .unwrap();
 
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
                 frame_info.render_info.resource_uploader(&mut frame_info.builder, pipeline_index),
-                aspect,
+                frame_info.render_info.size(),
                 frame_info.image_index
             );
 
