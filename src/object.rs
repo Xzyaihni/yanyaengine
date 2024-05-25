@@ -134,6 +134,11 @@ impl Object
         self.texture = texture;
     }
 
+    pub fn set_inplace_texture(&mut self, texture: Texture)
+    {
+        *self.texture.write() = texture;
+    }
+
     fn needs_draw(&self) -> bool
     {
         !self.model.read().vertices.is_empty()
