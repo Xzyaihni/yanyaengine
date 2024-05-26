@@ -115,6 +115,7 @@ pub struct GlyphInfo
     pub height: u32
 }
 
+#[derive(Debug)]
 pub struct TextObject
 {
     pub object: Option<Object>,
@@ -150,7 +151,9 @@ impl TextObject
 
         let height_font = metrics.ascent + metrics.descent.abs();
 
-        let height = (height_font / info.font_size as f32).round() as i32;
+        let height = (height_font / metrics.units_per_em as f32 * info.font_size as f32)
+            .round() as i32;
+
         let aspect = full_bounds.width as f32 / height as f32;
 
         let width = full_bounds.width;
@@ -170,17 +173,12 @@ impl TextObject
 
         positions.into_iter().zip(info.text.chars()).for_each(|(char_x, c)|
         {
-            let is_empty = false;//bounds.width == 0.0 || bounds.height == 0.0;
-
-            if !is_empty
-            {
-                current_font.render_glyph(
-                    &mut text_canvas,
-                    info.font_size,
-                    char_x,
-                    c
-                );
-            }
+            current_font.render_glyph(
+                &mut text_canvas,
+                info.font_size,
+                char_x,
+                c
+            );
         });
 
         let object = object_factory.create(ObjectInfo{
@@ -233,7 +231,8 @@ impl TextObject
     {
         let colors = canvas.pixels.into_iter().map(|value|
         {
-            Color::new(u8::MAX, u8::MAX, u8::MAX, value)
+            Color::new(value, 0, 0, u8::MAX)
+            // Color::new(u8::MAX, u8::MAX, u8::MAX, value)
         }).collect::<Vec<_>>();
 
         let image = SimpleImage::new(colors, canvas.size.x() as usize, canvas.size.y() as usize);
@@ -329,7 +328,7 @@ impl CharsRasterizer
             Some(id) => id,
             None =>
             {
-                eprintln!("couldnt get the advance of {c}, returning {DEFAULT_ADVANCE}");
+                // eprintln!("couldnt get the advance of {c}, returning {DEFAULT_ADVANCE}");
                 return DEFAULT_ADVANCE
             }
         };
@@ -337,9 +336,9 @@ impl CharsRasterizer
         let advance = match self.font.advance(id)
         {
             Ok(id) => id,
-            Err(err) =>
+            Err(_err) =>
             {
-                eprintln!("couldnt get the advance of {c} ({err}), returning {DEFAULT_ADVANCE}");
+                // eprintln!("couldnt get the advance of {c} ({err}), returning {DEFAULT_ADVANCE}");
                 return DEFAULT_ADVANCE
             }
         };
