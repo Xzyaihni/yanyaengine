@@ -28,8 +28,18 @@ pub struct ObjectCreatePartialInfo<'a>
     pub builder_wrapper: BuilderWrapper<'a>,
     pub assets: Arc<Mutex<Assets>>,
     pub object_factory: Arc<ObjectFactory>,
-    pub aspect: f32,
+    pub size: [f32; 2],
     pub image_index: usize
+}
+
+impl ObjectCreatePartialInfo<'_>
+{
+    pub fn aspect(&self) -> f32
+    {
+        let [x, y] = self.size;
+
+        x / y
+    }
 }
 
 pub struct ObjectCreateInfo<'a>

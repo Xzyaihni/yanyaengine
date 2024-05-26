@@ -53,7 +53,7 @@ impl Engine
     pub fn object_create_partial_info<'a>(
         &'a mut self,
         resource_uploader: ResourceUploader<'a>,
-        aspect: f32,
+        size: [f32; 2],
         image_index: usize
     ) -> ObjectCreatePartialInfo<'a>
     {
@@ -67,7 +67,7 @@ impl Engine
             builder_wrapper,
             assets: self.assets.clone(),
             object_factory: self.object_factory.clone(),
-            aspect,
+            size,
             image_index
         }
     }
@@ -75,11 +75,11 @@ impl Engine
     pub fn init_partial_info<'a>(
         &'a mut self,
         resource_uploader: ResourceUploader<'a>,
-        aspect: f32,
+        size: [f32; 2],
         image_index: usize
     ) -> InitPartialInfo<'a>
     {
-        self.object_create_partial_info(resource_uploader, aspect, image_index)
+        self.object_create_partial_info(resource_uploader, size, image_index)
     }
 
     pub fn swap_pipeline(&mut self, info: &PipelineInfo)

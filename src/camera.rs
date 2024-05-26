@@ -91,6 +91,18 @@ impl Camera
         self.regenerate_projection_view();
     }
 
+    pub fn screen_position(&self, position: Vector2<f32>) -> Vector2<f32>
+    {
+        let offset = position - self.position().coords.xy();
+
+        offset.component_div(&self.size())
+    }
+
+    pub fn screen_size(&self, size: Vector2<f32>) -> Vector2<f32>
+    {
+        size.component_div(&self.size())
+    }
+
     pub fn position(&self) -> &Point3<f32>
     {
         self.view.position()

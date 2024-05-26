@@ -6,7 +6,7 @@ use crate::{
     TextInfo,
     TextObject,
     ObjectFactory,
-    object::resource_uploader::ResourceUploader,
+    object::{Texture, texture::RgbaImage, resource_uploader::ResourceUploader},
     text_factory::{FontsContainer, TextFactory}
 };
 
@@ -48,6 +48,11 @@ impl<'a> BuilderWrapper<'a>
             self.object_factory.clone(),
             self.fonts_info
         )
+    }
+
+    pub fn create_texture(&mut self, image: RgbaImage) -> Texture
+    {
+        Texture::new(&mut self.resource_uploader, image)
     }
 
     pub fn create_text(&mut self, info: TextInfo) -> TextObject
