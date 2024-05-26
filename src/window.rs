@@ -951,9 +951,9 @@ fn execute_builder(
         fence.wait(None).unwrap();
     }
 
-    let previous_fence = match fences[previous_frame_index].clone()
+    let previous_fence = match &fences[previous_frame_index]
     {
-        Some(fence) => fence.boxed(),
+        Some(fence) => fence.clone().boxed(),
         None =>
         {
             let mut now = vulkano::sync::now(device);
@@ -978,6 +978,7 @@ fn execute_builder(
     let mut recreate_swapchain = false;
     fences[image_index] = match fence
     {
+        #[allow(clippy::arc_with_non_send_sync)]
         Ok(fence) => Some(Arc::new(fence)),
         Err(Validated::Error(VulkanError::OutOfDate)) =>
         {

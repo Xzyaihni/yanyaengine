@@ -167,7 +167,7 @@ impl TextObject
         }
 
         let mut text_canvas = Canvas::new(
-            Vector2I::new(width as i32, height as i32),
+            Vector2I::new(width, height),
             Format::A8
         );
 
@@ -231,8 +231,7 @@ impl TextObject
     {
         let colors = canvas.pixels.into_iter().map(|value|
         {
-            Color::new(value, 0, 0, u8::MAX)
-            // Color::new(u8::MAX, u8::MAX, u8::MAX, value)
+            Color::new(u8::MAX, u8::MAX, u8::MAX, value)
         }).collect::<Vec<_>>();
 
         let image = SimpleImage::new(colors, canvas.size.x() as usize, canvas.size.y() as usize);
@@ -418,7 +417,7 @@ impl CharsRasterizer
                 }
 
                 let small_y = y * width;
-                let big_y = y * big_width as usize;
+                let big_y = y * big_width;
 
                 let this_pixel = &mut canvas.pixels[big_y + offset_x];
                 *this_pixel = this_pixel.saturating_add(small.pixels[small_y + x]);

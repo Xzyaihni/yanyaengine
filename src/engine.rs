@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    rc::Rc,
+    sync::Arc
+};
 
 use parking_lot::Mutex;
 
@@ -19,7 +22,7 @@ use crate::{
 pub struct Engine
 {
     fonts_info: FontsContainer,
-    object_factory: Arc<ObjectFactory>,
+    object_factory: Rc<ObjectFactory>,
     assets: Arc<Mutex<Assets>>
 }
 
@@ -43,7 +46,7 @@ impl Engine
         let allocator = ObjectAllocator::new(device, frames);
 
         let object_factory = ObjectFactory::new(allocator);
-        let object_factory = Arc::new(object_factory);
+        let object_factory = Rc::new(object_factory);
 
         let fonts_info = FontsContainer::new();
 

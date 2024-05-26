@@ -116,11 +116,11 @@ impl From<usize> for TextureId
     }
 }
 
-impl Into<usize> for TextureId
+impl From<TextureId> for usize
 {
-    fn into(self) -> usize
+    fn from(value: TextureId) -> usize
     {
-        self.0
+        value.0
     }
 }
 
@@ -135,11 +135,11 @@ impl From<usize> for ModelId
     }
 }
 
-impl Into<usize> for ModelId
+impl From<ModelId> for usize
 {
-    fn into(self) -> usize
+    fn from(value: ModelId) -> usize
     {
-        self.0
+        value.0
     }
 }
 
