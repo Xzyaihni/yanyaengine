@@ -4,6 +4,8 @@ use std::{
     sync::Arc
 };
 
+use nalgebra::Vector2;
+
 use vulkano::{
     format::Format,
     buffer::{Buffer, BufferUsage, BufferCreateInfo},
@@ -333,6 +335,18 @@ impl Texture
     pub fn image(&self) -> &Arc<Image>
     {
         self.view.image()
+    }
+
+    pub fn aspect_min(&self) -> Vector2<f32>
+    {
+        let [x, y, _z] = self.view.image().extent();
+
+        let x = x as f32;
+        let y = y as f32;
+
+        let max_size = x.max(y);
+
+        Vector2::new(x, y) / max_size
     }
 
     pub fn swap_pipeline(&mut self, info: &PipelineInfo)
