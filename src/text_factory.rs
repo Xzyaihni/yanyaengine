@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use font_kit::{
     font::Font,
@@ -49,6 +49,11 @@ impl FontsContainer
         self.font_textures.len()
     }
 
+    pub fn is_empty(&self) -> bool
+    {
+        self.font_textures.is_empty()
+    }
+
     pub fn get_mut(&mut self, index: usize) -> Option<&mut CharsRasterizer>
     {
         self.font_textures.get_mut(index)
@@ -65,7 +70,7 @@ pub struct TextInfo<'a>
 pub struct TextFactory<'a, 'b: 'a>
 {
     resource_uploader: &'a mut ResourceUploader<'b>,
-    object_factory: Arc<ObjectFactory>,
+    object_factory: Rc<ObjectFactory>,
     fonts_container: &'a mut FontsContainer
 }
 
@@ -73,7 +78,7 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
 {
     pub fn new(
         resource_uploader: &'a mut ResourceUploader<'b>,
-        object_factory: Arc<ObjectFactory>,
+        object_factory: Rc<ObjectFactory>,
         fonts_container: &'a mut FontsContainer
     ) -> Self
     {

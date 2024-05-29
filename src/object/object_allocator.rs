@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    rc::Rc,
+    sync::Arc
+};
 
 use vulkano::{
 	device::Device,
@@ -19,7 +22,7 @@ use super::{
 #[derive(Debug, Clone)]
 pub struct ObjectAllocator
 {
-	allocator: Arc<SubbufferAllocator>,
+	allocator: Rc<SubbufferAllocator>,
 	frames: usize
 }
 
@@ -38,7 +41,7 @@ impl ObjectAllocator
 			}
 		);
 
-		let allocator = Arc::new(allocator);
+		let allocator = Rc::new(allocator);
 
 		Self{allocator, frames}
 	}

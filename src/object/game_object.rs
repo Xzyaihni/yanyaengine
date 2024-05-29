@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    rc::Rc,
+    sync::Arc
+};
 
 use nalgebra::Matrix4;
 
@@ -27,7 +30,7 @@ pub struct ObjectCreatePartialInfo<'a>
 {
     pub builder_wrapper: BuilderWrapper<'a>,
     pub assets: Arc<Mutex<Assets>>,
-    pub object_factory: Arc<ObjectFactory>,
+    pub object_factory: Rc<ObjectFactory>,
     pub size: [f32; 2],
     pub image_index: usize
 }

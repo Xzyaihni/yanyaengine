@@ -423,7 +423,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
     fn create_device(
         surface: Arc<Surface>,
         instance: Arc<Instance>
-    ) -> (Arc<PhysicalDevice>, (Arc<Device>, impl Iterator<Item=Arc<Queue>> + ExactSizeIterator))
+    ) -> (Arc<PhysicalDevice>, (Arc<Device>, impl ExactSizeIterator<Item=Arc<Queue>>))
     {
         let device_extensions = DeviceExtensions{
             khr_swapchain: true,

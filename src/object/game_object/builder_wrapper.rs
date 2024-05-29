@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::rc::Rc;
 
 use super::CommandBuilderType;
 
@@ -14,7 +14,7 @@ use crate::{
 pub struct BuilderWrapper<'a>
 {
     resource_uploader: ResourceUploader<'a>,
-    object_factory: Arc<ObjectFactory>,
+    object_factory: Rc<ObjectFactory>,
     fonts_info: &'a mut FontsContainer
 }
 
@@ -22,7 +22,7 @@ impl<'a> BuilderWrapper<'a>
 {
     pub fn new(
         resource_uploader: ResourceUploader<'a>,
-        object_factory: Arc<ObjectFactory>,
+        object_factory: Rc<ObjectFactory>,
         fonts_info: &'a mut FontsContainer
     ) -> Self
     {
