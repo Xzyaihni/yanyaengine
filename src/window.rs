@@ -39,6 +39,7 @@ use vulkano::{
         view::ImageView,
         sampler::{
             Filter,
+            SamplerMipmapMode,
             Sampler,
             SamplerCreateInfo
         }
@@ -178,6 +179,7 @@ impl RenderInfo
             SamplerCreateInfo{
                 mag_filter: Filter::Nearest,
                 min_filter: Filter::Linear,
+                mipmap_mode: SamplerMipmapMode::Linear,
                 ..Default::default()
             }
         ).unwrap();

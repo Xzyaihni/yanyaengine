@@ -12,6 +12,7 @@ use vulkano::{
     command_buffer::CopyBufferToImageInfo,
     memory::allocator::{MemoryTypeFilter, AllocationCreateInfo},
     image::{
+        max_mip_levels,
         Image,
         ImageType,
         ImageUsage,
@@ -313,12 +314,15 @@ impl Texture
             image.data.iter().copied()
         ).unwrap();
 
+        let extent = [image.width, image.height, 1];
+
         let image = Image::new(
             resource_uploader.allocator.clone(),
             ImageCreateInfo{
                 image_type: ImageType::Dim2d,
                 format: Format::R8G8B8A8_UNORM,
-                extent: [image.width, image.height, 1],
+                extent,
+                mip_levels: max_mip_levels(extent),
                 usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
                 ..Default::default()
             },
