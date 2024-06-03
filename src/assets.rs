@@ -16,6 +16,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::{
     PipelineInfo,
+    UniformLocation,
     object::{
         resource_uploader::ResourceUploader,
         model::Model,
@@ -254,11 +255,12 @@ impl Assets
         TexturesPath: AsRef<Path>,
         ModelsPath: AsRef<Path>
     {
+        let texture_location = UniformLocation{set: 0, binding: 0};
         let textures = Self::load_resource(textures_path, |path|
         {
             FilesLoader::load_images(path).map(|named_value|
             {
-                named_value.map(|image| Texture::new(resource_uploader, image))
+                named_value.map(|image| Texture::new(resource_uploader, image, texture_location))
             })
         });
 

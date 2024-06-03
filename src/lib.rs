@@ -66,6 +66,8 @@ pub use transform::{
     OnTransformCallback
 };
 
+pub use allocators::UniformLocation;
+
 pub use object_factory::{ObjectFactory, ObjectInfo};
 pub use assets::*;
 

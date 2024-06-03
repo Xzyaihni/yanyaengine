@@ -4,10 +4,7 @@ use vulkano::{
     pipeline::PipelineLayout,
 	memory::allocator::StandardMemoryAllocator,
 	image::sampler::Sampler,
-	descriptor_set::{
-		allocator::StandardDescriptorSetAllocator,
-		layout::DescriptorSetLayout
-	},
+	descriptor_set::allocator::StandardDescriptorSetAllocator,
 	command_buffer::{
 		AutoCommandBufferBuilder,
 		PrimaryAutoCommandBuffer
@@ -18,7 +15,7 @@ use vulkano::{
 pub struct PipelineInfo<'a>
 {
 	pub allocator: &'a StandardDescriptorSetAllocator,
-	pub layout: Arc<DescriptorSetLayout>,
+	pub layout: Arc<PipelineLayout>,
 	pub sampler: Arc<Sampler>
 }
 
@@ -30,9 +27,7 @@ impl<'a> PipelineInfo<'a>
         layout: Arc<PipelineLayout>
     ) -> Self
     {
-        let descriptor_layout = layout.set_layouts().get(0).unwrap().clone();
-
-        Self{allocator, layout: descriptor_layout, sampler}
+        Self{allocator, layout, sampler}
     }
 }
 

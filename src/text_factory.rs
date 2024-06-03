@@ -10,6 +10,7 @@ use font_kit::{
 use crate::{
     ObjectFactory,
     TextObject,
+    UniformLocation,
     transform::Transform,
     text_object::CharsRasterizer,
     object::resource_uploader::ResourceUploader
@@ -91,7 +92,8 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
             self.resource_uploader,
             &self.object_factory,
             info,
-            self.fonts_container
+            self.fonts_container,
+            UniformLocation{set: 0, binding: 0}
         )
     }
 }

@@ -31,6 +31,7 @@ use image::{
     error::ImageError
 };
 
+use crate::UniformLocation;
 use super::resource_uploader::{PipelineInfo, ResourceUploader};
 
 
@@ -276,23 +277,26 @@ impl fmt::Debug for RgbaImage
 pub struct Texture
 {
     view: Arc<ImageView>,
-    descriptor_set: Arc<PersistentDescriptorSet>
+    descriptor_set: Arc<PersistentDescriptorSet>,
+    location: UniformLocation
 }
 
 impl Texture
 {
     pub fn new(
         resource_uploader: &mut ResourceUploader,
-        image: RgbaImage
+        image: RgbaImage,
+        location: UniformLocation
     ) -> Self
     {
         let view = Self::calculate_descriptor_set(resource_uploader, &image);
         let descriptor_set = Self::calculate_persistent_set(
             view.clone(),
-            &resource_uploader.pipeline_info
+            &resource_uploader.pipeline_info,
+            location
         );
 
-        Self{view, descriptor_set}
+        Self{view, descriptor_set, location}
     }
 
     fn calculate_descriptor_set(
@@ -355,21 +359,28 @@ impl Texture
 
     pub fn swap_pipeline(&mut self, info: &PipelineInfo)
     {
-        self.descriptor_set = Self::calculate_persistent_set(self.view.clone(), info);
+        self.descriptor_set = Self::calculate_persistent_set(
+            self.view.clone(),
+            info,
+            self.location
+        );
     }
 
     fn calculate_persistent_set(
         view: Arc<ImageView>,
-        info: &PipelineInfo
+        info: &PipelineInfo,
+        location: UniformLocation
     ) -> Arc<PersistentDescriptorSet>
     {
+        let descriptor_layout = info.layout.set_layouts().get(location.set).unwrap().clone();
+
         // TODO change this when im gonna add support for multiple shaders
         PersistentDescriptorSet::new(
             info.allocator,
-            info.layout.clone(),
+            descriptor_layout,
             [
                 WriteDescriptorSet::image_view_sampler(
-                    0, view, info.sampler.clone()
+                    location.binding, view, info.sampler.clone()
                 )
             ],
             []

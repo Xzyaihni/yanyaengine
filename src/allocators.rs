@@ -20,6 +20,13 @@ use crate::object::{
 };
 
 
+#[derive(Debug, Clone, Copy)]
+pub struct UniformLocation
+{
+    pub set: usize,
+    pub binding: u32
+}
+
 type ThisMemoryAllocator = GenericMemoryAllocator<FreeListAllocator>;
 
 #[derive(Debug)]

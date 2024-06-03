@@ -6,6 +6,7 @@ use crate::{
     TextInfo,
     TextObject,
     ObjectFactory,
+    UniformLocation,
     object::{Texture, texture::RgbaImage, resource_uploader::ResourceUploader},
     text_factory::{FontsContainer, TextFactory}
 };
@@ -50,9 +51,13 @@ impl<'a> BuilderWrapper<'a>
         )
     }
 
-    pub fn create_texture(&mut self, image: RgbaImage) -> Texture
+    pub fn create_texture(
+        &mut self,
+        image: RgbaImage,
+        location: UniformLocation
+    ) -> Texture
     {
-        Texture::new(&mut self.resource_uploader, image)
+        Texture::new(&mut self.resource_uploader, image, location)
     }
 
     pub fn create_text(&mut self, info: TextInfo) -> TextObject
