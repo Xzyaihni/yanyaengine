@@ -15,9 +15,11 @@ use vulkano::{
 
 use nalgebra::{Vector3, Vector4, Matrix4};
 
-use crate::transform::{Transform, OnTransformCallback, TransformContainer};
+use crate::{
+    allocators::ObjectAllocator,
+    transform::{Transform, OnTransformCallback, TransformContainer}
+};
 
-use object_allocator::ObjectAllocator;
 pub use object_transform::ObjectTransform;
 
 use game_object::*;
@@ -27,7 +29,6 @@ pub use texture::Texture;
 mod object_transform;
 
 pub mod game_object;
-pub mod object_allocator;
 pub mod resource_uploader;
 pub mod model;
 pub mod texture;

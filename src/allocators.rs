@@ -1,11 +1,9 @@
-use std::{
-    rc::Rc,
-    sync::Arc
-};
+use std::sync::Arc;
 
 use vulkano::{
 	device::Device,
 	buffer::{
+        BufferContents,
 		BufferUsage,
 		Subbuffer,
 		allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}
@@ -13,16 +11,16 @@ use vulkano::{
 	memory::allocator::{MemoryTypeFilter, StandardMemoryAllocator}
 };
 
-use super::{
+use crate::object::{
     ObjectVertex,
     Model
 };
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ObjectAllocator
 {
-	allocator: Rc<SubbufferAllocator>,
+	allocator: SubbufferAllocator,
 	frames: usize
 }
 
@@ -41,8 +39,6 @@ impl ObjectAllocator
 			}
 		);
 
-		let allocator = Rc::new(allocator);
-
 		Self{allocator, frames}
 	}
 
@@ -57,5 +53,35 @@ impl ObjectAllocator
 	pub fn subbuffers_amount(&self) -> usize
 	{
 		self.frames
+	}
+}
+
+#[derive(Debug)]
+pub struct UniformAllocator
+{
+	allocator: SubbufferAllocator
+}
+
+impl UniformAllocator
+{
+	pub fn new(device: Arc<Device>) -> Self
+	{
+		let allocator = StandardMemoryAllocator::new_default(device);
+		let allocator = SubbufferAllocator::new(
+			Arc::new(allocator),
+			SubbufferAllocatorCreateInfo{
+				buffer_usage: BufferUsage::UNIFORM_BUFFER,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+				..Default::default()
+			}
+		);
+
+		Self{allocator}
+	}
+
+	pub fn allocate_sized<T: BufferContents>(&self) -> Subbuffer<T>
+	{
+        self.allocator.allocate_sized().unwrap()
 	}
 }

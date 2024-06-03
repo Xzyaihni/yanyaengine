@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use super::{
-    ObjectAllocator,
+    allocators::ObjectAllocator,
 	object::ObjectTransform,
 	object::{
 		Object,

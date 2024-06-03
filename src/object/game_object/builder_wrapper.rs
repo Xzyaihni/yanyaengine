@@ -13,6 +13,7 @@ use crate::{
 
 pub struct BuilderWrapper<'a>
 {
+    // pub uniform_allocator: Rc<UniformAllocator>,
     resource_uploader: ResourceUploader<'a>,
     object_factory: Rc<ObjectFactory>,
     fonts_info: &'a mut FontsContainer

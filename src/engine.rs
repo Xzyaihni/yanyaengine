@@ -10,9 +10,9 @@ use vulkano::device::Device;
 use crate::{
     PipelineInfo,
     ObjectFactory,
-    ObjectAllocator,
     AssetsPaths,
     Assets,
+    allocators::ObjectAllocator,
     text_factory::FontsContainer,
     game_object::*,
     object::resource_uploader::ResourceUploader

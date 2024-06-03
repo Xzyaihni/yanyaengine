@@ -48,7 +48,6 @@ use game_object::*;
 pub use object::{
     Object,
     game_object,
-    object_allocator::ObjectAllocator,
     resource_uploader::PipelineInfo
 };
 
@@ -73,6 +72,8 @@ pub use assets::*;
 pub use control::Control;
 
 mod control;
+
+pub mod allocators;
 
 pub mod object;
 pub mod camera;
