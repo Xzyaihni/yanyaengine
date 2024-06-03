@@ -1,14 +1,17 @@
 use std::sync::Arc;
 
 use vulkano::{
-	device::Device,
 	buffer::{
         BufferContents,
 		BufferUsage,
 		Subbuffer,
 		allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}
 	},
-	memory::allocator::{MemoryTypeFilter, StandardMemoryAllocator}
+	memory::allocator::{
+        GenericMemoryAllocator,
+        FreeListAllocator,
+        MemoryTypeFilter
+    }
 };
 
 use crate::object::{
@@ -16,6 +19,8 @@ use crate::object::{
     Model
 };
 
+
+type ThisMemoryAllocator = GenericMemoryAllocator<FreeListAllocator>;
 
 #[derive(Debug)]
 pub struct ObjectAllocator
@@ -26,11 +31,13 @@ pub struct ObjectAllocator
 
 impl ObjectAllocator
 {
-	pub fn new(device: Arc<Device>, frames: usize) -> Self
+	pub fn new(
+        allocator: Arc<ThisMemoryAllocator>,
+        frames: usize
+    ) -> Self
 	{
-		let allocator = StandardMemoryAllocator::new_default(device);
 		let allocator = SubbufferAllocator::new(
-			Arc::new(allocator),
+			allocator,
 			SubbufferAllocatorCreateInfo{
 				buffer_usage: BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST,
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
@@ -64,11 +71,10 @@ pub struct UniformAllocator
 
 impl UniformAllocator
 {
-	pub fn new(device: Arc<Device>) -> Self
+	pub fn new(allocator: Arc<ThisMemoryAllocator>) -> Self
 	{
-		let allocator = StandardMemoryAllocator::new_default(device);
 		let allocator = SubbufferAllocator::new(
-			Arc::new(allocator),
+			allocator,
 			SubbufferAllocatorCreateInfo{
 				buffer_usage: BufferUsage::UNIFORM_BUFFER,
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE

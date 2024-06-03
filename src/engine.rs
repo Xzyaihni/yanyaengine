@@ -5,14 +5,17 @@ use std::{
 
 use parking_lot::Mutex;
 
-use vulkano::device::Device;
+use vulkano::{
+    device::Device,
+    memory::allocator::StandardMemoryAllocator
+};
 
 use crate::{
     PipelineInfo,
     ObjectFactory,
     AssetsPaths,
     Assets,
-    allocators::ObjectAllocator,
+    allocators::{UniformAllocator, ObjectAllocator},
     text_factory::FontsContainer,
     game_object::*,
     object::resource_uploader::ResourceUploader
@@ -23,6 +26,7 @@ pub struct Engine
 {
     fonts_info: FontsContainer,
     object_factory: Rc<ObjectFactory>,
+    uniform_allocator: Rc<UniformAllocator>,
     assets: Arc<Mutex<Assets>>
 }
 
@@ -43,14 +47,16 @@ impl Engine
 
         let assets = Arc::new(Mutex::new(assets));
 
-        let allocator = ObjectAllocator::new(device, frames);
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device));
+        let allocator = ObjectAllocator::new(memory_allocator.clone(), frames);
+        let uniform_allocator = Rc::new(UniformAllocator::new(memory_allocator));
 
         let object_factory = ObjectFactory::new(allocator);
         let object_factory = Rc::new(object_factory);
 
         let fonts_info = FontsContainer::new();
 
-        Self{fonts_info, object_factory, assets}
+        Self{fonts_info, object_factory, uniform_allocator, assets}
     }
 
     pub fn object_create_partial_info<'a>(
@@ -70,6 +76,7 @@ impl Engine
             builder_wrapper,
             assets: self.assets.clone(),
             object_factory: self.object_factory.clone(),
+            uniform_allocator: self.uniform_allocator.clone(),
             size,
             image_index
         }

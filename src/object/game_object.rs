@@ -15,6 +15,7 @@ use vulkano::{
 use crate::{
     Assets,
     ObjectFactory,
+    allocators::UniformAllocator,
     camera::Camera
 };
 
@@ -31,6 +32,7 @@ pub struct ObjectCreatePartialInfo<'a>
     pub builder_wrapper: BuilderWrapper<'a>,
     pub assets: Arc<Mutex<Assets>>,
     pub object_factory: Rc<ObjectFactory>,
+    pub uniform_allocator: Rc<UniformAllocator>,
     pub size: [f32; 2],
     pub image_index: usize
 }
