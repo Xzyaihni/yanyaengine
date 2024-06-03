@@ -23,7 +23,7 @@ use crate::object::{
 #[derive(Debug, Clone, Copy)]
 pub struct UniformLocation
 {
-    pub set: usize,
+    pub set: u32,
     pub binding: u32
 }
 

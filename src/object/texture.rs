@@ -372,7 +372,9 @@ impl Texture
         location: UniformLocation
     ) -> Arc<PersistentDescriptorSet>
     {
-        let descriptor_layout = info.layout.set_layouts().get(location.set).unwrap().clone();
+        let descriptor_layout = info.layout.set_layouts().get(location.set as usize)
+            .unwrap()
+            .clone();
 
         // TODO change this when im gonna add support for multiple shaders
         PersistentDescriptorSet::new(

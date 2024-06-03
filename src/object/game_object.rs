@@ -8,13 +8,19 @@ use nalgebra::Matrix4;
 use parking_lot::Mutex;
 
 use vulkano::{
-    pipeline::PipelineLayout,
+    pipeline::{PipelineBindPoint, PipelineLayout},
+    descriptor_set::WriteDescriptorSet,
+    buffer::{
+        Subbuffer,
+        BufferContents
+    },
     command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer},
 };
 
 use crate::{
     Assets,
     ObjectFactory,
+    UniformLocation,
     allocators::UniformAllocator,
     camera::Camera
 };
@@ -26,6 +32,22 @@ mod builder_wrapper;
 
 pub type CommandBuilderType = AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>;
 type LayoutType = Arc<PipelineLayout>;
+
+#[allow(dead_code)]
+pub fn push_uniform_buffer<T: BufferContents>(
+    info: &mut DrawInfo,
+    location: UniformLocation,
+    buffer: Subbuffer<T>
+)
+{
+    info.object_info.builder_wrapper.builder().push_descriptor_set(
+            PipelineBindPoint::Graphics,
+            info.layout.clone(),
+            location.set,
+            vec![WriteDescriptorSet::buffer(location.binding, buffer)].into()
+        )
+        .unwrap();
+}
 
 pub struct ObjectCreatePartialInfo<'a>
 {
