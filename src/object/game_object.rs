@@ -34,6 +34,20 @@ pub type CommandBuilderType = AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>
 type LayoutType = Arc<PipelineLayout>;
 
 #[allow(dead_code)]
+pub fn push_constants<T: BufferContents>(
+    info: &mut DrawInfo,
+    constants: T
+)
+{
+    info.object_info.builder_wrapper.builder().push_constants(
+            info.layout.clone(),
+            0,
+            constants
+        )
+        .unwrap();
+}
+
+#[allow(dead_code)]
 pub fn push_uniform_buffer<T: BufferContents>(
     info: &mut DrawInfo,
     location: UniformLocation,
