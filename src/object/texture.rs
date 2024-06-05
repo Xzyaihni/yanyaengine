@@ -162,6 +162,22 @@ impl SimpleImage
         self.colors[index] = self.colors[index].blend(color);
     }
 
+    pub fn flipped_horizontal(&self) -> Self
+    {
+        let mut flipped = self.clone();
+
+        (0..self.height).for_each(|y|
+        {
+            (0..self.width).for_each(|x|
+            {
+                let this = self.get_pixel(self.width - x - 1, y);
+                flipped.set_pixel(this, x, y);
+            });
+        });
+
+        flipped
+    }
+
     pub fn blit(&mut self, other: &Self, origin_x: usize, origin_y: usize)
     {
         self.blit_inner(other, origin_x, origin_y, |this, p, x, y|

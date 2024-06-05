@@ -15,12 +15,13 @@ use strum_macros::{EnumIter, IntoStaticStr};
 use serde::{Serialize, Deserialize};
 
 use crate::{
+    BuilderWrapper,
     PipelineInfo,
     UniformLocation,
     object::{
         resource_uploader::ResourceUploader,
         model::Model,
-        texture::{RgbaImage, Texture}
+        texture::{SimpleImage, RgbaImage, Texture}
     }
 };
 
@@ -240,6 +241,7 @@ where
 
 pub struct Assets
 {
+    textures_path: Option<PathBuf>,
     textures: IdsStorage<TextureId, Arc<RwLock<Texture>>>,
 	models: IdsStorage<ModelId, Arc<RwLock<Model>>>
 }
@@ -256,6 +258,8 @@ impl Assets
         ModelsPath: AsRef<Path>
     {
         let texture_location = UniformLocation{set: 0, binding: 0};
+
+        let output_textures_path = textures_path.as_ref().map(|x| x.as_ref().to_owned());
         let textures = Self::load_resource(textures_path, |path|
         {
             FilesLoader::load_images(path).map(|named_value|
@@ -274,7 +278,11 @@ impl Assets
 
         models.extend(Self::create_default_models());
 
-        Self{textures, models}
+        Self{
+            textures_path: output_textures_path,
+            textures,
+            models
+        }
     }
 
     fn load_resource<Id, T, F, I, P>(maybe_path: Option<P>, f: F) -> IdsStorage<Id, Arc<RwLock<T>>>
@@ -326,6 +334,26 @@ impl Assets
     pub fn model(&self, id: ModelId) -> &Arc<RwLock<Model>>
     {
         &self.models[id]
+    }
+
+    pub fn edited_copy(
+        &mut self,
+        builder_wrapper: &mut BuilderWrapper,
+        name: &str,
+        f: impl FnOnce(&mut SimpleImage)
+    ) -> TextureId
+    {
+        let textures_path = self.textures_path.as_ref().expect("cant edit empty assets");
+
+        let mut image = SimpleImage::load(textures_path.join(name)).unwrap();
+        f(&mut image);
+
+        let texture = builder_wrapper.create_texture(
+            image.into(),
+            UniformLocation{set: 0, binding: 0}
+        );
+
+        self.textures.insert((name.to_owned(), Arc::new(RwLock::new(texture))))
     }
 
     pub fn add_textures<T>(&mut self, textures: T)
