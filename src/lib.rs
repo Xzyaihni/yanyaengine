@@ -112,7 +112,9 @@ pub trait YanyaApp
 where
     Self: Sized
 {
-    fn init(info: InitPartialInfo) -> Self;
+    type AppInfo: Default;
+    
+    fn init(info: InitPartialInfo, app_info: Self::AppInfo) -> Self;
 
     fn input(&mut self, _control: Control) {}
 
@@ -280,13 +282,14 @@ impl ShadersContainer
     }
 }
 
-pub struct AppBuilder<UserApp>
+pub struct AppBuilder<UserApp: YanyaApp>
 {
     instance: Arc<Instance>,
     window_builder: WindowBuilder,
     event_loop: EventLoop<()>,
     shaders: ShadersContainer,
     options: AppOptions,
+    app_init: Option<UserApp::AppInfo>,
     _user_app: PhantomData<UserApp>
 }
 
@@ -307,6 +310,13 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         let icon = Icon::from_rgba(texture.into_vec(), width, height).ok();
 
         self.window_builder = self.window_builder.with_window_icon(icon);
+
+        self
+    }
+
+    pub fn with_app_init(mut self, app_init: UserApp::AppInfo) -> Self
+    {
+        self.app_init = Some(app_init);
 
         self
     }
@@ -387,7 +397,11 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
             queues: queues.collect()
         };
 
-        window::run::<UserApp>(graphics_info, self.options);
+        window::run::<UserApp>(
+            graphics_info,
+            self.options,
+            self.app_init.unwrap_or_default()
+        );
     }
 
     fn get_physical(
@@ -397,7 +411,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
     ) -> (Arc<PhysicalDevice>, u32)
     {
         instance.enumerate_physical_devices()
-            .expect("cant enumerate devices,,,,")
+            .expect("no devices that support vulkan found :(")
             .filter(|device| device.supported_extensions().contains(device_extensions))
             .filter_map(|device|
             {
@@ -420,7 +434,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
                     PhysicalDeviceType::Cpu => 3,
                     _ => 4
                 }
-            }).expect("nyo rendering device...")
+            }).expect("no viable device for rendering :(")
     }
 
     fn create_device(
@@ -481,6 +495,7 @@ impl<UserApp: YanyaApp + 'static> App<UserApp>
             event_loop,
             shaders: ShadersContainer::new(),
             options: AppOptions::default(),
+            app_init: None,
             _user_app: PhantomData
         }
     }

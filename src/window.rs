@@ -1,4 +1,5 @@
 use std::{
+    mem,
     time::Instant,
     sync::Arc
 };
@@ -559,7 +560,11 @@ impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
     }
 }
 
-pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
+pub fn run<UserApp: YanyaApp + 'static>(
+    info: GraphicsInfo,
+    options: AppOptions,
+    app_init: UserApp::AppInfo
+)
 {
     let capabilities = info.physical_device
         .surface_capabilities(&info.surface, Default::default())
@@ -614,16 +619,18 @@ pub fn run<UserApp: YanyaApp + 'static>(info: GraphicsInfo, options: AppOptions)
 
     info.event_loop.set_control_flow(ControlFlow::Poll);
 
+    let mut app_init: Option<_> = Some(app_init);
     info.event_loop.run(move |event, event_loop|
     {
-        handle_event(&mut handle_info, event, event_loop);
+        handle_event(&mut handle_info, event, event_loop, &mut app_init);
     }).unwrap();
 }
 
 fn handle_event<UserApp: YanyaApp + 'static>(
     info: &mut HandleEventInfo<UserApp>,
     event: Event<()>,
-    event_loop: &EventLoopWindowTarget<()>
+    event_loop: &EventLoopWindowTarget<()>,
+    app_init: &mut Option<UserApp::AppInfo>
 )
 {
     match event
@@ -711,13 +718,16 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                 return;
             }
 
-            handle_redraw(info);
+            handle_redraw(info, app_init);
         },
         _ => ()
     }
 }
 
-fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp>)
+fn handle_redraw<UserApp: YanyaApp + 'static>(
+    info: &mut HandleEventInfo<UserApp>,
+    app_init: &mut Option<UserApp::AppInfo>
+)
 {
     if info.recreate_swapchain || (info.initialized && info.window_resized)
     {
@@ -800,7 +810,8 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(info: &mut HandleEventInfo<UserApp
                         image_index
                     );
 
-                Some(UserApp::init(init_info))
+                let app_init = mem::take(app_init).unwrap();
+                Some(UserApp::init(init_info, app_init))
             };
         }
 
