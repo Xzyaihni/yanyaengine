@@ -42,13 +42,14 @@ use winit::{
 };
 
 use window::{GraphicsInfo, PipelineCreateInfo};
+pub use window::PipelineInfo;
 
 use game_object::*;
 
 pub use object::{
     Object,
     game_object,
-    resource_uploader::PipelineInfo
+    resource_uploader::ResourceUploader
 };
 
 pub use text_object::TextObject;
@@ -128,14 +129,15 @@ where
 
     fn update_buffers(&mut self, _info: UpdateBuffersPartialInfo) {}
 
-    fn swap_pipeline(&mut self, _info: PipelineInfo) {}
+    fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
 }
 
 pub struct AppOptions
 {
     clear_color: ClearValue,
     assets_paths: AssetsPaths,
-    samples: SampleCount
+    samples: SampleCount,
+    default_shader: Option<ShaderId>
 }
 
 impl Default for AppOptions
@@ -145,7 +147,8 @@ impl Default for AppOptions
         Self{
             clear_color: [0.0, 0.0, 0.0, 1.0].into(),
             assets_paths: AssetsPaths::default(),
-            samples: SampleCount::Sample2
+            samples: SampleCount::Sample2,
+            default_shader: None
         }
     }
 }
@@ -257,8 +260,16 @@ impl IntoIterator for ShadersContainer
     }
 }
 
-#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShaderId(usize);
+
+impl ShaderId
+{
+    pub fn get_raw(&self) -> usize
+    {
+        self.0
+    }
+}
 
 impl ShadersContainer
 {
@@ -349,9 +360,14 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         self
     }
 
-    pub fn with_shaders(mut self, shaders: ShadersContainer) -> Self
+    pub fn with_shaders(
+        mut self,
+        shaders: ShadersContainer,
+        default_shader: ShaderId
+    ) -> Self
     {
         self.shaders = shaders;
+        self.options.default_shader = Some(default_shader);
 
         self
     }
@@ -361,7 +377,12 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         if self.shaders.is_empty()
         {
             // load default shaders
-            self.shaders.push(ShadersInfo::new(default_vertex::load, default_fragment::load));
+            let id = self.shaders.push(ShadersInfo::new(
+                default_vertex::load,
+                default_fragment::load
+            ));
+
+            self.options.default_shader = Some(id);
         }
 
         let window = Arc::new(self.window_builder.build(&self.event_loop).unwrap());

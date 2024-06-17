@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use vulkano::{
-    pipeline::PipelineLayout,
 	memory::allocator::StandardMemoryAllocator,
 	image::sampler::Sampler,
 	descriptor_set::allocator::StandardDescriptorSetAllocator,
@@ -11,41 +10,14 @@ use vulkano::{
 	}
 };
 
+use crate::PipelineInfo;
 
-pub struct PipelineInfo<'a>
-{
-	pub allocator: &'a StandardDescriptorSetAllocator,
-	pub layout: Arc<PipelineLayout>,
-	pub sampler: Arc<Sampler>
-}
-
-impl<'a> PipelineInfo<'a>
-{
-    pub fn new(
-        allocator: &'a StandardDescriptorSetAllocator,
-        sampler: Arc<Sampler>,
-        layout: Arc<PipelineLayout>
-    ) -> Self
-    {
-        Self{allocator, layout, sampler}
-    }
-}
-
-impl<'a> Clone for PipelineInfo<'a>
-{
-    fn clone(&self) -> Self
-    {
-        Self{
-            allocator: self.allocator,
-            layout: self.layout.clone(),
-            sampler: self.sampler.clone()
-        }
-    }
-}
 
 pub struct ResourceUploader<'a>
 {
 	pub allocator: Arc<StandardMemoryAllocator>,
+	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
+	pub sampler: Arc<Sampler>,
 	pub builder: &'a mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
-	pub pipeline_info: PipelineInfo<'a>
+	pub pipeline_infos: &'a [PipelineInfo]
 }

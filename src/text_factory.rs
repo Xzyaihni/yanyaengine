@@ -11,6 +11,7 @@ use crate::{
     ObjectFactory,
     TextObject,
     UniformLocation,
+    ShaderId,
     transform::Transform,
     text_object::CharsRasterizer,
     object::resource_uploader::ResourceUploader
@@ -86,14 +87,20 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
         Self{resource_uploader, object_factory, fonts_container}
     }
 
-    pub fn create(&mut self, info: TextInfo) -> TextObject
+    pub fn create(
+        &mut self,
+        location: UniformLocation,
+        shader: ShaderId,
+        info: TextInfo
+    ) -> TextObject
     {
         TextObject::new(
             self.resource_uploader,
             &self.object_factory,
             info,
             self.fonts_container,
-            UniformLocation{set: 0, binding: 0}
+            location,
+            shader
         )
     }
 }

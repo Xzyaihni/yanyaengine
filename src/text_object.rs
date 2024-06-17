@@ -22,6 +22,7 @@ use crate::{
     TextInfo,
     ObjectInfo,
     UniformLocation,
+    ShaderId,
     text_factory::FontsContainer,
     transform::{TransformContainer, Transform},
     game_object::*,
@@ -130,7 +131,8 @@ impl TextObject
         object_factory: &ObjectFactory,
         info: TextInfo,
         font_textures: &mut FontsContainer,
-        location: UniformLocation
+        location: UniformLocation,
+        shader: ShaderId
     ) -> Self
     {
         let mut full_bounds = BoundsCalculator::new();
@@ -185,7 +187,7 @@ impl TextObject
 
         let object = object_factory.create(ObjectInfo{
             model: Arc::new(RwLock::new(Model::square(1.0))),
-            texture: Self::canvas_to_texture(resource_uploader, text_canvas, location),
+            texture: Self::canvas_to_texture(resource_uploader, text_canvas, location, shader),
             transform: info.transform
         });
 
@@ -229,7 +231,8 @@ impl TextObject
     fn canvas_to_texture(
         resource_uploader: &mut ResourceUploader,
         canvas: Canvas,
-        location: UniformLocation
+        location: UniformLocation,
+        shader: ShaderId
     ) -> Arc<RwLock<Texture>>
     {
         let colors = canvas.pixels.into_iter().map(|value|
@@ -238,7 +241,7 @@ impl TextObject
         }).collect::<Vec<_>>();
 
         let image = SimpleImage::new(colors, canvas.size.x() as usize, canvas.size.y() as usize);
-        let texture = Texture::new(resource_uploader, image.into(), location);
+        let texture = Texture::new(resource_uploader, image.into(), location, shader);
 
         Arc::new(RwLock::new(texture))
     }

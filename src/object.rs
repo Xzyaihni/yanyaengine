@@ -171,10 +171,11 @@ impl GameObject for Object
 
         let size = self.model.read().vertices.len() as u32;
 
+        let layout = info.current_layout();
         info.object_info.builder_wrapper.builder()
             .bind_descriptor_sets(
                 PipelineBindPoint::Graphics,
-                info.layout.clone(),
+                layout,
                 0,
                 self.texture.read().descriptor_set()
             )

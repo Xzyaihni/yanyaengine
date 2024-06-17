@@ -16,8 +16,8 @@ use serde::{Serialize, Deserialize};
 
 use crate::{
     BuilderWrapper,
-    PipelineInfo,
     UniformLocation,
+    ShaderId,
     object::{
         resource_uploader::ResourceUploader,
         model::Model,
@@ -243,7 +243,9 @@ pub struct Assets
 {
     textures_path: Option<PathBuf>,
     textures: IdsStorage<TextureId, Arc<RwLock<Texture>>>,
-	models: IdsStorage<ModelId, Arc<RwLock<Model>>>
+	models: IdsStorage<ModelId, Arc<RwLock<Model>>>,
+    texture_location: UniformLocation,
+    shader: ShaderId
 }
 
 impl Assets
@@ -251,20 +253,23 @@ impl Assets
     pub fn new<TexturesPath, ModelsPath>(
         resource_uploader: &mut ResourceUploader,
         textures_path: Option<TexturesPath>,
-        models_path: Option<ModelsPath>
+        models_path: Option<ModelsPath>,
+        texture_location: UniformLocation,
+        shader: ShaderId
     ) -> Self
     where
         TexturesPath: AsRef<Path>,
         ModelsPath: AsRef<Path>
     {
-        let texture_location = UniformLocation{set: 0, binding: 0};
-
         let output_textures_path = textures_path.as_ref().map(|x| x.as_ref().to_owned());
         let textures = Self::load_resource(textures_path, |path|
         {
             FilesLoader::load_images(path).map(|named_value|
             {
-                named_value.map(|image| Texture::new(resource_uploader, image, texture_location))
+                named_value.map(|image|
+                {
+                    Texture::new(resource_uploader, image, texture_location, shader)
+                })
             })
         });
 
@@ -281,7 +286,9 @@ impl Assets
         Self{
             textures_path: output_textures_path,
             textures,
-            models
+            models,
+            texture_location,
+            shader
         }
     }
 
@@ -350,7 +357,8 @@ impl Assets
 
         let texture = builder_wrapper.create_texture(
             image.into(),
-            UniformLocation{set: 0, binding: 0}
+            self.texture_location,
+            self.shader
         );
 
         self.textures.insert((name.to_owned(), Arc::new(RwLock::new(texture))))
@@ -403,11 +411,11 @@ impl Assets
         assets.extend(insert_assets);
     }
 
-	pub fn swap_pipeline(&mut self, info: &PipelineInfo)
+	pub fn swap_pipelines(&mut self, resource_uploader: &ResourceUploader)
 	{
 		self.textures.iter_mut().for_each(|texture|
 		{
-			texture.write().swap_pipeline(info)
+			texture.write().swap_pipeline(resource_uploader)
 		});
 	}
 }

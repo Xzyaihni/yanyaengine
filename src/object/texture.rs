@@ -31,8 +31,8 @@ use image::{
     error::ImageError
 };
 
-use crate::UniformLocation;
-use super::resource_uploader::{PipelineInfo, ResourceUploader};
+use crate::{UniformLocation, ShaderId};
+use super::resource_uploader::ResourceUploader;
 
 
 #[derive(Debug, Clone, Copy)]
@@ -294,7 +294,8 @@ pub struct Texture
 {
     view: Arc<ImageView>,
     descriptor_set: Arc<PersistentDescriptorSet>,
-    location: UniformLocation
+    location: UniformLocation,
+    shader: ShaderId
 }
 
 impl Texture
@@ -302,17 +303,20 @@ impl Texture
     pub fn new(
         resource_uploader: &mut ResourceUploader,
         image: RgbaImage,
-        location: UniformLocation
+        location: UniformLocation,
+        shader: ShaderId
     ) -> Self
     {
         let view = Self::calculate_descriptor_set(resource_uploader, &image);
+
         let descriptor_set = Self::calculate_persistent_set(
             view.clone(),
-            &resource_uploader.pipeline_info,
-            location
+            resource_uploader,
+            location,
+            shader
         );
 
-        Self{view, descriptor_set, location}
+        Self{view, descriptor_set, location, shader}
     }
 
     fn calculate_descriptor_set(
@@ -373,32 +377,34 @@ impl Texture
         Vector2::new(x, y) / max_size
     }
 
-    pub fn swap_pipeline(&mut self, info: &PipelineInfo)
+    pub fn swap_pipeline(&mut self, resource_uploader: &ResourceUploader)
     {
         self.descriptor_set = Self::calculate_persistent_set(
             self.view.clone(),
-            info,
-            self.location
+            resource_uploader,
+            self.location,
+            self.shader
         );
     }
 
     fn calculate_persistent_set(
         view: Arc<ImageView>,
-        info: &PipelineInfo,
-        location: UniformLocation
+        resource_uploader: &ResourceUploader,
+        location: UniformLocation,
+        shader: ShaderId
     ) -> Arc<PersistentDescriptorSet>
     {
+        let info = &resource_uploader.pipeline_infos[shader.get_raw()];
         let descriptor_layout = info.layout.set_layouts().get(location.set as usize)
             .unwrap()
             .clone();
 
-        // TODO change this when im gonna add support for multiple shaders
         PersistentDescriptorSet::new(
-            info.allocator,
+            &resource_uploader.descriptor_allocator,
             descriptor_layout,
             [
                 WriteDescriptorSet::image_view_sampler(
-                    location.binding, view, info.sampler.clone()
+                    location.binding, view, resource_uploader.sampler.clone()
                 )
             ],
             []

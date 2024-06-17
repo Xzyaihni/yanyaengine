@@ -94,7 +94,6 @@ use crate::{
     YanyaApp,
     AppOptions,
     Control,
-    PipelineInfo,
     ShadersInfo,
     engine::Engine,
     game_object::*,
@@ -105,13 +104,13 @@ use crate::{
 };
 
 
-struct PipelineInfoRaw
+pub struct PipelineInfo
 {
-    pipeline: Arc<GraphicsPipeline>,
-    layout: Arc<PipelineLayout>
+    pub pipeline: Arc<GraphicsPipeline>,
+    pub layout: Arc<PipelineLayout>
 }
 
-impl From<Arc<GraphicsPipeline>> for PipelineInfoRaw
+impl From<Arc<GraphicsPipeline>> for PipelineInfo
 {
     fn from(value: Arc<GraphicsPipeline>) -> Self
     {
@@ -147,15 +146,15 @@ struct RenderInfo
     pub device: Arc<Device>,
     pub swapchain: Arc<Swapchain>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
-    pub pipelines: Vec<PipelineInfoRaw>,
+    pub pipelines: Vec<PipelineInfo>,
     pub viewport: Viewport,
     pub surface: Arc<Surface>,
     pub render_pass: Arc<RenderPass>,
     pub sampler: Arc<Sampler>,
     pub samples: SampleCount,
     pipeline_infos: Vec<PipelineCreateInfo>,
-    pub descriptor_set_allocator: StandardDescriptorSetAllocator,
-    pub memory_allocator: Arc<StandardMemoryAllocator>
+    pub memory_allocator: Arc<StandardMemoryAllocator>,
+    descriptor_allocator: Arc<StandardDescriptorSetAllocator>
 }
 
 impl RenderInfo
@@ -170,11 +169,6 @@ impl RenderInfo
         composite_alpha: CompositeAlpha
     ) -> Self
     {
-        let descriptor_set_allocator = StandardDescriptorSetAllocator::new(
-            device.clone(),
-            Default::default()
-        );
-
         let sampler = Sampler::new(
             device.clone(),
             SamplerCreateInfo{
@@ -273,6 +267,11 @@ impl RenderInfo
             &pipeline_infos
         );
 
+        let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default()
+        ));
+
         Self{
             device,
             swapchain,
@@ -284,8 +283,8 @@ impl RenderInfo
             samples,
             sampler,
             pipeline_infos,
-            descriptor_set_allocator,
-            memory_allocator
+            memory_allocator,
+            descriptor_allocator
         }
     }
 
@@ -343,7 +342,7 @@ impl RenderInfo
         viewport: Viewport,
         subpass: Subpass,
         device: Arc<Device>
-    ) -> PipelineInfoRaw
+    ) -> PipelineInfo
     {
         let mut dynamic_state = ahash::HashSet::default();
         dynamic_state.insert(DynamicState::Scissor);
@@ -391,7 +390,7 @@ impl RenderInfo
         render_pass: Arc<RenderPass>,
         device: Arc<Device>,
         pipeline_infos: &[PipelineCreateInfo]
-    ) -> Vec<PipelineInfoRaw>
+    ) -> Vec<PipelineInfo>
     {
         let subpass = Subpass::from(render_pass, 0).unwrap();
 
@@ -406,25 +405,17 @@ impl RenderInfo
         }).collect()
     }
 
-    pub fn pipeline_info(&self, index: usize) -> PipelineInfo
-    {
-        PipelineInfo::new(
-            &self.descriptor_set_allocator,
-            self.sampler.clone(),
-            self.pipelines[index].layout.clone()
-        )
-    }
-
     pub fn resource_uploader<'a>(
         &'a self,
-        builder: &'a mut CommandBuilderType,
-        index: usize
+        builder: &'a mut CommandBuilderType
     ) -> ResourceUploader<'a>
     {
         ResourceUploader{
             allocator: self.memory_allocator.clone(),
+            descriptor_allocator: self.descriptor_allocator.clone(),
+            sampler: self.sampler.clone(),
             builder,
-            pipeline_info: self.pipeline_info(index)
+            pipeline_infos: &self.pipelines
         }
     }
 
@@ -529,7 +520,6 @@ struct HandleEventInfo<UserApp>
     user_app: Option<UserApp>,
     previous_time: Instant,
     previous_frame_index: usize,
-    pipeline_index: usize,
     initialized: bool,
     recreate_swapchain: bool,
     window_resized: bool
@@ -551,8 +541,6 @@ impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
             user_app: None,
             previous_time: Instant::now(),
             previous_frame_index: 0,
-            // TODO change this when im gonna make shaders blablabla
-            pipeline_index: 0,
             initialized: false,
             recreate_swapchain: false,
             window_resized: false
@@ -729,6 +717,12 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
     app_init: &mut Option<UserApp::AppInfo>
 )
 {
+    let mut builder = AutoCommandBufferBuilder::primary(
+        &info.command_allocator,
+        info.queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit
+    ).unwrap();
+
     if info.recreate_swapchain || (info.initialized && info.window_resized)
     {
         info.recreate_swapchain = false;
@@ -744,10 +738,9 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             return;
         }
 
-        let swap_pipeline = info.render_info.pipeline_info(info.pipeline_index);
-
-        info.engine.as_mut().unwrap().swap_pipeline(&swap_pipeline);
-        info.user_app.as_mut().unwrap().swap_pipeline(swap_pipeline);
+        let resource_uploader = info.render_info.resource_uploader(&mut builder);
+        info.engine.as_mut().unwrap().swap_pipelines(&resource_uploader);
+        info.user_app.as_mut().unwrap().swap_pipelines(&resource_uploader);
 
         if info.window_resized
         {
@@ -756,12 +749,6 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
 
         info.window_resized = false;
     }
-
-    let mut builder = AutoCommandBufferBuilder::primary(
-        &info.command_allocator,
-        info.queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit
-    ).unwrap();
 
     builder.set_scissor(0, vec![Scissor::default()].into()).unwrap();
 
@@ -795,9 +782,10 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
 
             info.engine = Some(Engine::new(
                 &info.options.assets_paths,
-                info.render_info.resource_uploader(&mut builder, info.pipeline_index),
+                info.render_info.resource_uploader(&mut builder),
                 info.device.clone(),
-                info.fences_amount
+                info.fences_amount,
+                info.options.default_shader.unwrap()
             ));
 
             info.user_app = {
@@ -805,7 +793,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                     .as_mut()
                     .unwrap()
                     .init_partial_info(
-                        info.render_info.resource_uploader(&mut builder, info.pipeline_index),
+                        info.render_info.resource_uploader(&mut builder),
                         info.render_info.size(),
                         image_index
                     );
@@ -820,7 +808,6 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             engine: info.engine.as_mut().unwrap(),
             builder,
             image_index,
-            layout: info.render_info.pipelines[info.pipeline_index].layout.clone(),
             render_info: &mut info.render_info,
             previous_time: &mut info.previous_time
         };
@@ -865,7 +852,6 @@ struct RunFrameInfo<'a>
     engine: &'a mut Engine,
     image_index: usize,
     builder: CommandBuilderType,
-    layout: Arc<PipelineLayout>,
     render_info: &'a mut RenderInfo,
     previous_time: &'a mut Instant
 }
@@ -881,13 +867,10 @@ fn run_frame<UserApp: YanyaApp>(
 
     user_app.update(delta_time);
 
-    // and ill change this one later too
-    let pipeline_index = 0;
-
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
-                frame_info.render_info.resource_uploader(&mut frame_info.builder, pipeline_index),
+                frame_info.render_info.resource_uploader(&mut frame_info.builder),
                 frame_info.render_info.size(),
                 frame_info.image_index
             );
@@ -918,24 +901,20 @@ fn run_frame<UserApp: YanyaApp>(
                 ..Default::default()
             }
         )
-        .unwrap()
-        .bind_pipeline_graphics(
-            frame_info.render_info.pipelines[pipeline_index].pipeline.clone()
-        )
         .unwrap();
 
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
-                frame_info.render_info.resource_uploader(&mut frame_info.builder, pipeline_index),
+                frame_info.render_info.resource_uploader(&mut frame_info.builder),
                 frame_info.render_info.size(),
                 frame_info.image_index
             );
 
-        let draw_info = DrawInfo{
-            object_info: object_create_info,
-            layout: frame_info.layout.clone()
-        };
+        let draw_info = DrawInfo::new(
+            object_create_info,
+            &frame_info.render_info.pipelines
+        );
 
         user_app.draw(draw_info);
     }
