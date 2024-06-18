@@ -52,6 +52,8 @@ pub use object::{
     resource_uploader::ResourceUploader
 };
 
+pub use occluding_plane::OccludingPlane;
+
 pub use text_object::TextObject;
 pub use text_factory::TextInfo;
 
@@ -78,6 +80,7 @@ mod control;
 
 pub mod allocators;
 
+pub mod occluding_plane;
 pub mod object;
 pub mod camera;
 pub mod transform;

@@ -38,11 +38,11 @@ pub mod texture;
 #[repr(C)]
 pub struct ObjectVertex
 {
-    #[format(R32G32B32_SFLOAT)]
-    position: [f32; 3],
+    #[format(R32G32B32A32_SFLOAT)]
+    pub position: [f32; 4],
 
     #[format(R32G32_SFLOAT)]
-    uv: [f32; 2]
+    pub uv: [f32; 2]
 }
 
 pub trait DrawableEntity
@@ -81,19 +81,12 @@ impl Object
     {
         let subbuffers = allocator.subbuffers(&model.read());
 
-        let mut this = Self{
+        Self{
             model,
             texture,
             transform,
             subbuffers
-        };
-
-        (0..allocator.subbuffers_amount()).for_each(|index|
-        {
-            this.create_buffer(index);
-        });
-
-        this
+        }
     }
 
 
@@ -109,15 +102,8 @@ impl Object
 
             let vertex = projection_view * transform * vertex;
 
-            ObjectVertex{position: vertex.xyz().into(), uv: *uv}
+            ObjectVertex{position: vertex.into(), uv: *uv}
         }).collect::<Box<[_]>>()
-    }
-
-    fn create_buffer(&mut self, index: usize)
-    {
-        let vertices = self.calculate_vertices(Matrix4::zeros());
-
-        self.subbuffers[index].write().unwrap().copy_from_slice(&vertices);
     }
 
     pub fn set_origin(&mut self, origin: Vector3<f32>)

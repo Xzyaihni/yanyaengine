@@ -3,6 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use super::{
+    OccludingPlane,
     allocators::ObjectAllocator,
 	object::ObjectTransform,
 	object::{
@@ -46,4 +47,11 @@ impl ObjectFactory
 			&self.allocator
 		)
 	}
+
+    pub fn create_occluding(&self, transform: Transform) -> OccludingPlane
+    {
+		let object_transform = ObjectTransform::new_transformed(transform);
+
+        OccludingPlane::new(object_transform, &self.allocator)
+    }
 }
