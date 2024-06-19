@@ -24,7 +24,7 @@ use vulkano::{
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
-            depth_stencil::{StencilState, DepthStencilState, DepthState},
+            depth_stencil::{DepthStencilState, DepthState},
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
@@ -373,6 +373,7 @@ impl RenderInfo
     {
         let mut dynamic_state = ahash::HashSet::default();
         dynamic_state.insert(DynamicState::Scissor);
+        dynamic_state.insert(DynamicState::DepthWriteEnable);
 
         let pipeline = GraphicsPipeline::new(
             device,

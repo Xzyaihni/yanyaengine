@@ -160,6 +160,13 @@ impl<'a> DrawInfo<'a>
             .unwrap();
     }
 
+    pub fn set_depth_write(&mut self, state: bool)
+    {
+        self.object_info.builder_wrapper.builder()
+            .set_depth_write_enable(state)
+            .unwrap();
+    }
+
     pub fn set_scissor(&mut self, scissor: Scissor)
     {
         self.object_info.builder_wrapper.builder()
