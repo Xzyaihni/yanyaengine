@@ -24,6 +24,7 @@ use vulkano::{
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
+            depth_stencil::{StencilState, DepthStencilState, DepthState},
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
@@ -213,11 +214,17 @@ impl RenderInfo
                         samples: 1,
                         load_op: Clear,
                         store_op: Store
+                    },
+                    depth: {
+                        format: Format::D16_UNORM,
+                        samples: 1,
+                        load_op: Clear,
+                        store_op: DontCare
                     }
                 },
                 pass: {
                     color: [color],
-                    depth_stencil: {}
+                    depth_stencil: {depth}
                 }
             )
         } else
@@ -236,12 +243,18 @@ impl RenderInfo
                         samples: 1,
                         load_op: DontCare,
                         store_op: Store
+                    },
+                    depth: {
+                        format: Format::D16_UNORM,
+                        samples: 1,
+                        load_op: Clear,
+                        store_op: DontCare
                     }
                 },
                 pass: {
                     color: [multisampled],
                     color_resolve: [color],
-                    depth_stencil: {}
+                    depth_stencil: {depth}
                 }
             )
         }.unwrap();
@@ -302,9 +315,23 @@ impl RenderInfo
 
             let view = ImageView::new_default(image).unwrap();
 
+            let depth_image = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo{
+                    image_type: ImageType::Dim2d,
+                    format: Format::D16_UNORM,
+                    extent,
+                    usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default()
+            ).unwrap();
+
+            let depth = ImageView::new_default(depth_image).unwrap();
+
             let attachments = if let SampleCount::Sample1 = samples
             {
-                vec![view]
+                vec![view, depth]
             } else
             {
                 // im not sure if i need one for each swapchain image or if they can share??
@@ -323,7 +350,7 @@ impl RenderInfo
 
                 let multisampled = ImageView::new_default(multisampled_image).unwrap();
 
-                vec![multisampled, view]
+                vec![multisampled, view, depth]
             };
 
             Framebuffer::new(
@@ -376,6 +403,10 @@ impl RenderInfo
                         ..Default::default()
                     }
                 )),
+                depth_stencil_state: Some(DepthStencilState{
+                    depth: Some(DepthState::simple()),
+                    ..Default::default()
+                }),
                 dynamic_state,
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(shader.layout.clone())
@@ -879,13 +910,14 @@ fn run_frame<UserApp: YanyaApp>(
     }
 
     let clear_color = Some(options.clear_color);
+    let depth_clear = Some(1.0.into());
 
     let clear_values = if let SampleCount::Sample1 = frame_info.render_info.samples
     {
-        vec![clear_color]
+        vec![clear_color, depth_clear]
     } else
     {
-        vec![clear_color, None]
+        vec![clear_color, None, depth_clear]
     };
 
     frame_info.builder
