@@ -783,6 +783,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
     }
 
     builder.set_scissor(0, vec![Scissor::default()].into()).unwrap();
+    builder.set_depth_write_enable(true).unwrap();
 
     let acquired =
         match swapchain::acquire_next_image(info.render_info.swapchain.clone(), None)
