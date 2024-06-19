@@ -45,7 +45,7 @@ impl OccludingPlane
 
     fn calculate_vertices(
         &self,
-        origin: Vector3<f32>,
+        unscaled_origin: Vector3<f32>,
         projection_view: Matrix4<f32>
     ) -> Box<[ObjectVertex]>
     {
@@ -59,7 +59,7 @@ impl OccludingPlane
             Vector4::new(values.x, values.y, values.z, w)
         };
 
-        let origin = origin * 2.0;
+        let origin = unscaled_origin * 2.0;
 
         let mut top_left = bottom_left.xyz() + bottom_left.xyz() - origin;
         top_left.z = bottom_left.z;
@@ -75,7 +75,12 @@ impl OccludingPlane
         let cross_product = (bottom_right.xyz() - bottom_left.xyz())
             .cross(&(top_left.xyz() - bottom_left.xyz()));
 
-        let winding = bottom_left.xyz().dot(&cross_product);
+        let winding = {
+            let mut bottom_left = bottom_left.xyz();
+            bottom_left.z = unscaled_origin.z;
+
+            bottom_left.dot(&cross_product)
+        };
 
         let clockwise = winding > 0.0;
 
