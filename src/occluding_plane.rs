@@ -51,34 +51,31 @@ impl OccludingPlane
     {
         let transform = self.transform.matrix();
 
-        let project = |vertex: Vector4<f32>|
-        {
-            let mut vertex = projection_view * transform * vertex;
-            vertex.z = 0.0;
-
-            vertex
-        };
-
-        let bottom_left = project(Vector4::new(-0.5, 0.0, 0.0, 1.0));
-        let bottom_right = project(Vector4::new(0.5, 0.0, 0.0, 1.0));
+        let bottom_left = transform * Vector4::new(-0.5, 0.0, 0.0, 1.0);
+        let bottom_right = transform * Vector4::new(0.5, 0.0, 0.0, 1.0);
 
         let with_w = |values: Vector3<f32>, w|
         {
             Vector4::new(values.x, values.y, values.z, w)
         };
 
-        let origin = (projection_view * with_w(origin, 1.0)).xyz();
+        let origin = origin * 2.0;
 
-        let mut top_left = with_w(bottom_left.xyz() + bottom_left.xyz() - origin, 0.0);
-        top_left.z = 0.0;
+        let mut top_left = bottom_left.xyz() + bottom_left.xyz() - origin;
+        top_left.z = bottom_left.z;
 
-        let mut top_right = with_w(bottom_right.xyz() + bottom_right.xyz() - origin, 0.0);
-        top_right.z = 0.0;
+        let mut top_right = bottom_right.xyz() + bottom_right.xyz() - origin;
+        top_right.z = bottom_right.z;
+
+        let bottom_left = projection_view * bottom_left;
+        let bottom_right = projection_view * bottom_right;
+        let top_left = projection_view * with_w(top_left, 0.0);
+        let top_right = projection_view * with_w(top_right, 0.0);
 
         let cross_product = (bottom_right.xyz() - bottom_left.xyz())
             .cross(&(top_left.xyz() - bottom_left.xyz()));
 
-        let winding = cross_product.z;
+        let winding = bottom_left.xyz().dot(&cross_product);
 
         let clockwise = winding > 0.0;
 
