@@ -45,41 +45,42 @@ impl OccludingPlane
 
     fn calculate_vertices(
         &self,
-        unscaled_origin: Vector3<f32>,
+        origin: Vector3<f32>,
         projection_view: Matrix4<f32>
     ) -> Box<[ObjectVertex]>
     {
         let transform = self.transform.matrix();
 
-        let bottom_left = transform * Vector4::new(-0.5, 0.0, 0.0, 1.0);
-        let bottom_right = transform * Vector4::new(0.5, 0.0, 0.0, 1.0);
+        let un_bottom_left = transform * Vector4::new(-0.5, 0.0, 0.0, 1.0);
+        let un_bottom_right = transform * Vector4::new(0.5, 0.0, 0.0, 1.0);
 
         let with_w = |values: Vector3<f32>, w|
         {
             Vector4::new(values.x, values.y, values.z, w)
         };
 
-        let origin = unscaled_origin * 2.0;
+        let mut un_top_left = un_bottom_left.xyz() - origin;
+        un_top_left.z = un_bottom_left.z;
 
-        let mut top_left = bottom_left.xyz() + bottom_left.xyz() - origin;
-        top_left.z = bottom_left.z;
+        let mut un_top_right = un_bottom_right.xyz() - origin;
+        un_top_right.z = un_bottom_right.z;
 
-        let mut top_right = bottom_right.xyz() + bottom_right.xyz() - origin;
-        top_right.z = bottom_right.z;
-
-        let bottom_left = projection_view * bottom_left;
-        let bottom_right = projection_view * bottom_right;
-        let top_left = projection_view * with_w(top_left, 0.0);
-        let top_right = projection_view * with_w(top_right, 0.0);
-
-        let cross_product = (bottom_right.xyz() - bottom_left.xyz())
-            .cross(&(top_left.xyz() - bottom_left.xyz()));
+        let bottom_left = projection_view * un_bottom_left;
+        let bottom_right = projection_view * un_bottom_right;
+        let top_left = projection_view * with_w(un_top_left, 0.0);
+        let top_right = projection_view * with_w(un_top_right, 0.0);
 
         let winding = {
-            let mut bottom_left = bottom_left.xyz();
-            bottom_left.z = unscaled_origin.z;
+            let un_top_left = un_bottom_left.xyz() + un_bottom_left.xyz() - origin;
+            let top_left = (projection_view * with_w(un_top_left, 1.0)).xy();
 
-            bottom_left.dot(&cross_product)
+            let bottom_left = bottom_left.xy();
+            let bottom_right = bottom_right.xy();
+
+            let i0 = bottom_right - bottom_left;
+            let i1 = top_left - bottom_left;
+
+            i0.x * i1.y - i0.y * i1.x
         };
 
         let clockwise = winding > 0.0;
