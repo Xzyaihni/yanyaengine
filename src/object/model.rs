@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::{Serialize, Deserialize};
+
 
 type LineNumber = u32;
 
@@ -15,6 +17,57 @@ pub struct ParseError
 pub enum ParseErrorKind
 {
     
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum Uvs
+{
+    Normal,
+    FlipHorizontal,
+    FlipVertical,
+    FlipBoth
+}
+
+impl Default for Uvs
+{
+    fn default() -> Self
+    {
+        Self::Normal
+    }
+}
+
+impl Uvs
+{
+    fn bottom_left(&self) -> [f32; 2]
+    {
+        self.remap([0.0, 0.0])
+    }
+
+    fn bottom_right(&self) -> [f32; 2]
+    {
+        self.remap([1.0, 0.0])
+    }
+
+    fn top_left(&self) -> [f32; 2]
+    {
+        self.remap([0.0, 1.0])
+    }
+
+    fn top_right(&self) -> [f32; 2]
+    {
+        self.remap([1.0, 1.0])
+    }
+
+    fn remap(&self, uvs: [f32; 2]) -> [f32; 2]
+    {
+        match self
+        {
+            Self::Normal => uvs,
+            Self::FlipHorizontal => [1.0 - uvs[0], uvs[1]],
+            Self::FlipVertical => [uvs[0], 1.0 - uvs[1]],
+            Self::FlipBoth => [1.0 - uvs[0], 1.0 - uvs[1]]
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -41,10 +94,20 @@ impl Model
 
     pub fn square(side: f32) -> Self
     {
-        Self::rectangle(side, side)
+        Self::square_with_uvs(Uvs::Normal, side)
+    }
+
+    pub fn square_with_uvs(uvs: Uvs, side: f32) -> Self
+    {
+        Self::rectangle_with_uvs(uvs, side, side)
     }
 
     pub fn rectangle(width: f32, height: f32) -> Self
+    {
+        Self::rectangle_with_uvs(Uvs::Normal, width, height)
+    }
+
+    pub fn rectangle_with_uvs(uvs: Uvs, width: f32, height: f32) -> Self
     {
         let (half_width, half_height) = (width / 2.0, height / 2.0);
 
@@ -58,12 +121,12 @@ impl Model
         ];
 
         let uvs = vec![
-            [0.0, 0.0],
-            [0.0, 1.0],
-            [1.0, 0.0],
-            [0.0, 1.0],
-            [1.0, 1.0],
-            [1.0, 0.0]
+            uvs.bottom_left(),
+            uvs.top_left(),
+            uvs.bottom_right(),
+            uvs.top_left(),
+            uvs.top_right(),
+            uvs.bottom_right()
         ];
 
         Self{vertices, uvs}
