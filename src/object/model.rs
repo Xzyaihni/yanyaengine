@@ -19,7 +19,7 @@ pub enum ParseErrorKind
     
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum Uvs
 {
     Normal,
