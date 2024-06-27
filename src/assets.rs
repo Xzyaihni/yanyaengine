@@ -200,6 +200,17 @@ impl<I, T> IdsStorage<I, T>
         id
     }
 
+    pub fn push(&mut self, item: T) -> I
+    where
+        I: From<usize>
+    {
+        let id: I = self.data.len().into();
+
+        self.data.push(item);
+
+        id
+    }
+
     pub fn get_id(&self, name: &str) -> &I
     {
         self.ids.get(name).unwrap_or_else(|| panic!("asset named `{name}` doesnt exist"))
@@ -375,6 +386,16 @@ impl Assets
         T: IntoIterator<Item=(String, Model)>
     {
         Self::add_assets(models.into_iter(), &mut self.models);
+    }
+
+    pub fn push_texture(&mut self, texture: Texture) -> TextureId
+    {
+        self.textures.push(Arc::new(RwLock::new(texture)))
+    }
+
+    pub fn push_model(&mut self, model: Model) -> ModelId
+    {
+        self.models.push(Arc::new(RwLock::new(model)))
     }
 
     fn create_default_models() -> impl Iterator<Item=(String, Arc<RwLock<Model>>)>
