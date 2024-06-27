@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Serialize, Deserialize};
 
-use strum_macros::EnumIter;
+use strum::EnumIter;
 
 
 type LineNumber = u32;

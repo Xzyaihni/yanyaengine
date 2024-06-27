@@ -9,8 +9,7 @@ use std::{
 
 use parking_lot::RwLock;
 
-use strum::IntoEnumIterator;
-use strum_macros::{EnumIter, IntoStaticStr};
+use strum::{IntoEnumIterator, EnumIter, IntoStaticStr};
 
 use serde::{Serialize, Deserialize};
 
