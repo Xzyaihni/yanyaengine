@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::{Serialize, Deserialize};
 
+use strum_macros::EnumIter;
+
 
 type LineNumber = u32;
 
@@ -19,7 +21,7 @@ pub enum ParseErrorKind
     
 }
 
-#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, Serialize, Deserialize, EnumIter)]
 pub enum Uvs
 {
     Normal,
