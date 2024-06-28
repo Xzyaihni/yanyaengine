@@ -118,6 +118,11 @@ impl<'a> DrawInfo<'a>
         ).unwrap();
     }
 
+    pub fn current_pipeline_id(&self) -> Option<ShaderId>
+    {
+        self.current_pipeline.map(ShaderId)
+    }
+
     pub fn current_pipeline(&self) -> &PipelineInfo
     {
         &self.pipelines[self.current_pipeline.expect("pipeline must be bound")]
