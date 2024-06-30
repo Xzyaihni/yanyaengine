@@ -720,6 +720,7 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                     }
 
                     let control = Control::Keyboard{
+                        logical: event.logical_key,
                         keycode: event.physical_key,
                         state: event.state
                     };
