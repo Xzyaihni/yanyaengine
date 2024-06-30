@@ -7,7 +7,7 @@ use nalgebra::{
 };
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transform
 {
 	pub rotation_axis: Unit<Vector3<f32>>,
