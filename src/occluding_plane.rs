@@ -59,16 +59,23 @@ impl OccludingPlane
             Vector4::new(values.x, values.y, values.z, w)
         };
 
+        let z = un_bottom_left.z;
+
         let mut un_top_left = un_bottom_left.xyz() - origin;
-        un_top_left.z = un_bottom_left.z;
+        un_top_left.z = z;
 
         let mut un_top_right = un_bottom_right.xyz() - origin;
-        un_top_right.z = un_bottom_right.z;
+        un_top_right.z = z;
 
-        let bottom_left = projection_view * un_bottom_left;
-        let bottom_right = projection_view * un_bottom_right;
-        let top_left = projection_view * with_w(un_top_left, 0.0);
-        let top_right = projection_view * with_w(un_top_right, 0.0);
+        let mut bottom_left = projection_view * un_bottom_left;
+        let mut bottom_right = projection_view * un_bottom_right;
+        let mut top_left = projection_view * with_w(un_top_left, 0.0);
+        let mut top_right = projection_view * with_w(un_top_right, 0.0);
+
+        bottom_left.z = z;
+        bottom_right.z = z;
+        top_left.z = z;
+        top_right.z = z;
 
         let winding = {
             let un_top_left = un_bottom_left.xyz() + un_bottom_left.xyz() - origin;
