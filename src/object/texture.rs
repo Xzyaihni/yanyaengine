@@ -344,7 +344,7 @@ impl Texture
             resource_uploader.allocator.clone(),
             ImageCreateInfo{
                 image_type: ImageType::Dim2d,
-                format: Format::R8G8B8A8_UNORM,
+                format: Format::R8G8B8A8_SRGB,
                 extent,
                 mip_levels: max_mip_levels(extent),
                 usage: ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
