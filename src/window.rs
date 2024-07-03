@@ -7,7 +7,7 @@ use std::{
 use vulkano::{
     Validated,
     VulkanError,
-    format::Format,
+    format::{Format, NumericFormat},
     memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     descriptor_set::allocator::StandardDescriptorSetAllocator,
     shader::EntryPoint,
@@ -48,6 +48,7 @@ use vulkano::{
     },
     swapchain::{
         self,
+        ColorSpace,
         Surface,
         SurfaceCapabilities,
         CompositeAlpha,
@@ -190,6 +191,8 @@ impl RenderInfo
             None => image_count,
             Some(max_images) => image_count.min(max_images)
         };
+
+        eprintln!("framebuffer format: {image_format:?}");
 
         let (swapchain, images) = Swapchain::new(
             device.clone(),
@@ -607,9 +610,15 @@ pub fn run<UserApp: YanyaApp + 'static>(
         }
     };
 
-    let image_format = info.physical_device
+    let formats = info.physical_device
         .surface_formats(&info.surface, Default::default())
-        .unwrap()[0].0;
+        .unwrap();
+
+    let image_format = formats.iter().find(|(format, colorspace)|
+    {
+        format.numeric_format_color() == Some(NumericFormat::SRGB)
+            && *colorspace == ColorSpace::SrgbNonLinear
+    }).unwrap_or_else(|| &formats[0]).0;
 
     let render_info = RenderInfo::new(
         info.device.clone(),
