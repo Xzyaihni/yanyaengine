@@ -165,6 +165,13 @@ impl<'a> DrawInfo<'a>
             .unwrap();
     }
 
+    pub fn set_depth_test(&mut self, state: bool)
+    {
+        self.object_info.builder_wrapper.builder()
+            .set_depth_test_enable(state)
+            .unwrap();
+    }
+
     pub fn set_depth_write(&mut self, state: bool)
     {
         self.object_info.builder_wrapper.builder()

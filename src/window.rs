@@ -373,6 +373,7 @@ impl RenderInfo
     {
         let mut dynamic_state = ahash::HashSet::default();
         dynamic_state.insert(DynamicState::Scissor);
+        dynamic_state.insert(DynamicState::DepthTestEnable);
         dynamic_state.insert(DynamicState::DepthWriteEnable);
 
         let pipeline = GraphicsPipeline::new(
@@ -784,6 +785,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
     }
 
     builder.set_scissor(0, vec![Scissor::default()].into()).unwrap();
+    builder.set_depth_test_enable(true).unwrap();
     builder.set_depth_write_enable(true).unwrap();
 
     let acquired =
