@@ -3,6 +3,7 @@
 #![allow(clippy::new_without_default)]
 
 use std::{
+    fmt::Display,
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Arc
@@ -10,8 +11,6 @@ use std::{
 
 use vulkano::{
     VulkanLibrary,
-    Validated,
-    VulkanError,
     format::ClearValue,
     swapchain::Surface,
     image::SampleCount,
@@ -20,7 +19,7 @@ use vulkano::{
         PipelineShaderStageCreateInfo,
         layout::PipelineDescriptorSetLayoutCreateInfo
     },
-    shader::{EntryPoint, ShaderModule},
+    shader::{EntryPoint, ShaderModule, SpecializedShaderModule},
     device::{
         Device,
         DeviceCreateInfo,
@@ -163,9 +162,58 @@ pub struct AssetsPaths
     models: Option<PathBuf>
 }
 
-type ShaderLoadResult = Result<Arc<ShaderModule>, Validated<VulkanError>>;
+type WrapperShaderFn = Box<dyn FnOnce(Arc<Device>) -> EntryPoint>;
 
-type ShaderFn = fn(Arc<Device>) -> ShaderLoadResult;
+pub trait ShaderWrappable
+{
+    fn entry_point(
+        self,
+        name: &str,
+        device: Arc<Device>
+    ) -> Option<EntryPoint>;
+}
+
+pub trait EntryPointable
+{
+    fn entry_point(self, name: &str) -> Option<EntryPoint>;
+}
+
+impl EntryPointable for Arc<SpecializedShaderModule>
+{
+    fn entry_point(self, name: &str) -> Option<EntryPoint>
+    {
+        SpecializedShaderModule::entry_point(&self, name)
+    }
+}
+
+impl EntryPointable for Arc<ShaderModule>
+{
+    fn entry_point(self, name: &str) -> Option<EntryPoint>
+    {
+        ShaderModule::entry_point(&self, name)
+    }
+}
+
+impl<T, E, F> ShaderWrappable for F
+where
+    E: Display,
+    T: EntryPointable,
+    F: FnOnce(Arc<Device>) -> Result<T, E>
+{
+    fn entry_point(
+        self,
+        name: &str,
+        device: Arc<Device>
+    ) -> Option<EntryPoint>
+    {
+        let err_and_quit = |err|
+        {
+            panic!("error loading {} shader: {}", name, err)
+        };
+
+        (self)(device).unwrap_or_else(err_and_quit).entry_point("main")
+    }
+}
 
 #[derive(Clone)]
 pub struct ShadersInfo<VT, FT=VT>
@@ -182,32 +230,24 @@ impl<VT, FT> ShadersInfo<VT, FT>
     }
 }
 
-impl ShadersInfo<ShaderFn>
+impl ShadersInfo<WrapperShaderFn>
 {
-    pub fn new(vertex: ShaderFn, fragment: ShaderFn) -> Self
+    pub fn new<A: ShaderWrappable + 'static, B: ShaderWrappable + 'static>(
+        vertex: A,
+        fragment: B
+    ) -> Self
     {
         Self{
-            vertex,
-            fragment
+            vertex: Box::new(|device| vertex.entry_point("main", device).unwrap()),
+            fragment: Box::new(|device| fragment.entry_point("main", device).unwrap())
         }
     }
 
-    pub fn load(self, device: Arc<Device>) -> ShadersInfo<Arc<ShaderModule>>
+    pub fn load(self, device: Arc<Device>) -> ShadersInfo<EntryPoint>
     {
-        let err_and_quit = |name, err|
-        {
-            panic!("error loading {} shader: {}", name, err)
-        };
-
-        let vertex = (self.vertex)(device.clone())
-            .unwrap_or_else(|err| err_and_quit("vertex", err));
-
-        let fragment = (self.fragment)(device)
-            .unwrap_or_else(|err| err_and_quit("fragment", err));
-
         ShadersInfo{
-            vertex,
-            fragment,
+            vertex: (self.vertex)(device.clone()),
+            fragment: (self.fragment)(device),
         }
     }
 }
@@ -223,39 +263,15 @@ impl ShadersInfo<EntryPoint>
     }
 }
 
-impl From<&ShadersInfo<Arc<ShaderModule>>> for ShadersInfo<EntryPoint>
-{
-    fn from(value: &ShadersInfo<Arc<ShaderModule>>) -> Self
-    {
-        Self{
-            vertex: value.vertex_entry(),
-            fragment: value.fragment_entry()
-        }
-    }
-}
-
-impl ShadersInfo<Arc<ShaderModule>>
-{
-    pub fn vertex_entry(&self) -> EntryPoint
-    {
-        self.vertex.entry_point("main").unwrap()
-    }
-
-    pub fn fragment_entry(&self) -> EntryPoint
-    {
-        self.fragment.entry_point("main").unwrap()
-    }
-}
-
 pub struct ShadersContainer
 {
-    shaders: Vec<ShadersInfo<ShaderFn>>
+    shaders: Vec<ShadersInfo<WrapperShaderFn>>
 }
 
 impl IntoIterator for ShadersContainer
 {
-    type IntoIter = <Vec<ShadersInfo<ShaderFn>> as IntoIterator>::IntoIter;
-    type Item = ShadersInfo<ShaderFn>;
+    type IntoIter = <Vec<ShadersInfo<WrapperShaderFn>> as IntoIterator>::IntoIter;
+    type Item = ShadersInfo<WrapperShaderFn>;
 
     fn into_iter(self) -> Self::IntoIter
     {
@@ -281,7 +297,7 @@ impl ShadersContainer
         Self{shaders: Vec::new()}
     }
 
-    pub fn push(&mut self, value: ShadersInfo<ShaderFn>) -> ShaderId
+    pub fn push(&mut self, value: ShadersInfo<WrapperShaderFn>) -> ShaderId
     {
         let id = ShaderId(self.shaders.len());
 
@@ -400,7 +416,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         {
             let shader = shader_item.load(device.clone());
 
-            let stages = ShadersInfo::from(&shader).stages();
+            let stages = ShadersInfo::from(shader.clone()).stages();
 
             let info = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
                 .into_pipeline_layout_create_info(device.clone())
@@ -408,7 +424,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 
             let layout = PipelineLayout::new(device.clone(), info).unwrap();
 
-            PipelineCreateInfo::new(stages.into(), (&shader).into(), layout)
+            PipelineCreateInfo::new(stages.into(), shader, layout)
         }).collect();
 
         let graphics_info = GraphicsInfo{
