@@ -194,7 +194,7 @@ impl<I, T> IdsStorage<I, T>
     {
         let id: I = self.data.len().into();
 
-        self.ids.insert(item.0, id.clone());
+        self.ids.insert(item.0.replace('\\', "/"), id.clone());
         self.data.push(item.1);
 
         id
