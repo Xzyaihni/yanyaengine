@@ -54,7 +54,7 @@ pub use object::{
 pub use occluding_plane::OccludingPlane;
 
 pub use text_object::TextObject;
-pub use text_factory::TextInfo;
+pub use text_factory::{TextInfo, FontStyle};
 
 pub use nalgebra::Vector3;
 pub use winit::{

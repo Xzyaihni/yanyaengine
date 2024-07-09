@@ -3,9 +3,11 @@ use std::rc::Rc;
 use font_kit::{
     font::Font,
     source::SystemSource,
-    properties::Properties,
+    properties::{Properties, Weight},
     family_name::FamilyName
 };
+
+use serde::{Serialize, Deserialize};
 
 use crate::{
     ObjectFactory,
@@ -18,6 +20,14 @@ use crate::{
 };
 
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FontStyle
+{
+    Sans = 0,
+    Serif,
+    Bold
+}
+
 pub struct FontsContainer
 {
     font_textures: Vec<CharsRasterizer>
@@ -27,13 +37,22 @@ impl FontsContainer
 {
     pub fn new() -> Self
     {
-        let default_font = SystemSource::new()
-            .select_best_match(&[FamilyName::SansSerif], &Properties::new())
-            .unwrap()
-            .load()
-            .unwrap();
+        let load_family = |family, properties: Properties|
+        {
+            SystemSource::new()
+                .select_best_match(&[family], &properties)
+                .unwrap()
+                .load()
+                .unwrap()
+        };
 
-        Self::from_fonts(vec![default_font].into_iter())
+        let fonts = vec![
+            load_family(FamilyName::SansSerif, Properties::new()),
+            load_family(FamilyName::Serif, Properties::new()),
+            load_family(FamilyName::SansSerif, *Properties::new().weight(Weight::BOLD))
+        ];
+
+        Self::from_fonts(fonts.into_iter())
     }
 
     fn from_fonts(fonts: impl Iterator<Item=Font>) -> Self
@@ -56,9 +75,9 @@ impl FontsContainer
         self.font_textures.is_empty()
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut CharsRasterizer>
+    pub fn get_mut(&mut self, font: FontStyle) -> Option<&mut CharsRasterizer>
     {
-        self.font_textures.get_mut(index)
+        self.font_textures.get_mut(font as usize)
     }
 }
 
@@ -66,6 +85,7 @@ pub struct TextInfo<'a>
 {
     pub transform: Transform,
     pub font_size: u32,
+    pub font: FontStyle,
     pub text: &'a str
 }
 
@@ -94,11 +114,13 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
         info: TextInfo
     ) -> TextObject
     {
+        let style = info.font;
+
         TextObject::new(
             self.resource_uploader,
             &self.object_factory,
             info,
-            self.fonts_container,
+            self.fonts_container.get_mut(style).expect("all font styles must exist"),
             location,
             shader
         )

@@ -23,7 +23,6 @@ use crate::{
     ObjectInfo,
     UniformLocation,
     ShaderId,
-    text_factory::FontsContainer,
     transform::{TransformContainer, Transform},
     game_object::*,
     object::{
@@ -33,40 +32,6 @@ use crate::{
     }
 };
 
-
-pub struct FontsPicker<'a>
-{
-    font_textures: &'a mut FontsContainer,
-    current: usize
-}
-
-impl<'a> FontsPicker<'a>
-{
-    pub fn new(font_textures: &'a mut FontsContainer) -> Self
-    {
-        Self{
-            font_textures,
-            current: 0
-        }
-    }
-
-    pub fn current_font(&mut self) -> Option<&mut CharsRasterizer>
-    {
-        self.font_textures.get_mut(self.current)
-    }
-
-    pub fn cycle_next(&mut self, _resource_uploader: &mut ResourceUploader, _c: char)
-    {
-        self.current += 1;
-
-        // i could do fallback fonts here but im tired
-    }
-
-    pub fn reset_cycle(&mut self)
-    {
-        self.current = 0;
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -130,16 +95,12 @@ impl TextObject
         resource_uploader: &mut ResourceUploader,
         object_factory: &ObjectFactory,
         info: TextInfo,
-        font_textures: &mut FontsContainer,
+        current_font: &mut CharsRasterizer,
         location: UniformLocation,
         shader: ShaderId
     ) -> Self
     {
         let mut full_bounds = BoundsCalculator::new();
-
-        let mut fonts_picker = FontsPicker::new(font_textures);
-
-        let current_font = fonts_picker.current_font().expect("must have a font");
 
         let positions: Vec<_> = info.text.chars().map(|c|
         {
