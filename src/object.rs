@@ -45,11 +45,6 @@ pub struct ObjectVertex
     pub uv: [f32; 2]
 }
 
-pub trait DrawableEntity
-{
-    fn texture(&self) -> &str;
-}
-
 pub struct Object
 {
     model: Arc<RwLock<Model>>,
@@ -124,6 +119,11 @@ impl Object
     pub fn set_inplace_texture(&mut self, texture: Texture)
     {
         *self.texture.write() = texture;
+    }
+
+    pub fn texture(&self) -> &Arc<RwLock<Texture>>
+    {
+        &self.texture
     }
 
     fn needs_draw(&self) -> bool

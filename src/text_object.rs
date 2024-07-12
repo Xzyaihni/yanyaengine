@@ -230,6 +230,11 @@ impl TextObject
         (x, info)
     }
 
+    pub fn texture(&self) -> Option<&Arc<RwLock<Texture>>>
+    {
+        self.object.as_ref().map(|x| x.texture())
+    }
+
     pub fn transform(&self) -> Option<&Transform>
     {
         self.object.as_ref().map(|object| object.transform_ref())
