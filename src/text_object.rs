@@ -64,13 +64,18 @@ impl BoundsCalculator
 
     pub fn process_character(&mut self, info: BoundsInfo) -> i32
     {
-        self.width = self.x + info.origin.x + info.width as i32;
+        self.width = self.width.max(self.x + info.origin.x + info.width as i32);
 
         let this_x = self.x + info.origin.x;
 
         self.x += info.advance;
 
         this_x
+    }
+
+    pub fn return_carriage(&mut self)
+    {
+        self.x = 0;
     }
 }
 
@@ -102,22 +107,32 @@ impl TextObject
     {
         let mut full_bounds = BoundsCalculator::new();
 
-        let positions: Vec<_> = info.text.chars().map(|c|
+        let lines_count = info.text.lines().count();
+        let chars_info: Vec<_> = info.text.lines().enumerate().flat_map(|(y, line)|
         {
-            Self::with_font(
-                current_font,
-                &mut full_bounds,
-                info.font_size,
-                c
-            ).0
+            full_bounds.return_carriage();
+            // i dunno how to not collect >_<
+            line.chars().into_iter().map(|c|
+            {
+                let x = Self::with_font(
+                    current_font,
+                    &mut full_bounds,
+                    info.font_size,
+                    c
+                ).0;
+
+                (x, y, c)
+            }).collect::<Vec<_>>()
         }).collect();
 
         let metrics = current_font.metrics();
 
         let height_font = metrics.ascent + metrics.descent.abs();
 
-        let height = (height_font / metrics.units_per_em as f32 * info.font_size as f32)
+        let height_single = (height_font / metrics.units_per_em as f32 * info.font_size as f32)
             .round() as i32;
+
+        let height = height_single as usize * lines_count;
 
         let aspect = full_bounds.width as f32 / height as f32;
 
@@ -132,16 +147,18 @@ impl TextObject
         }
 
         let mut text_canvas = Canvas::new(
-            Vector2I::new(width, height),
+            Vector2I::new(width, height as i32),
             Format::A8
         );
 
-        positions.into_iter().zip(info.text.chars()).for_each(|(char_x, c)|
+        chars_info.into_iter().for_each(|(x, y, c)|
         {
             current_font.render_glyph(
                 &mut text_canvas,
+                height_single,
                 info.font_size,
-                char_x,
+                x,
+                y,
                 c
             );
         });
@@ -364,21 +381,24 @@ impl CharsRasterizer
     pub fn render_glyph(
         &self,
         canvas: &mut Canvas,
+        height: i32,
         font_size: u32,
         char_x: i32,
+        char_y: usize,
         c: char
     ) -> Option<()>
     {
-        let small = self.render_small(font_size, canvas.size.y(), c)?;
+        let small = self.render_small(font_size, height, c)?;
 
         let start_x = char_x.max(0) as usize;
 
         let big_width = canvas.size.x() as usize;
 
         let width = small.size.x() as usize;
-        let height = small.size.y() as usize;
 
-        for y in 0..height
+        let y_offset = char_y * height as usize;
+
+        for y in 0..height as usize
         {
             for x in 0..width
             {
@@ -389,7 +409,7 @@ impl CharsRasterizer
                 }
 
                 let small_y = y * width;
-                let big_y = y * big_width;
+                let big_y = (y + y_offset) * big_width;
 
                 let this_pixel = &mut canvas.pixels[big_y + offset_x];
                 *this_pixel = this_pixel.saturating_add(small.pixels[small_y + x]);
