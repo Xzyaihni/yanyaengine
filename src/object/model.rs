@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::{Serialize, Deserialize};
 
+use nalgebra::Vector3;
+
 use strum::EnumIter;
 
 
@@ -132,6 +134,16 @@ impl Model
         ];
 
         Self{vertices, uvs}
+    }
+
+    pub fn shift(&mut self, offset: Vector3<f32>)
+    {
+        self.vertices.iter_mut().for_each(|vertex|
+        {
+            vertex[0] += offset.x;
+            vertex[1] += offset.y;
+            vertex[2] += offset.z;
+        });
     }
 }
 

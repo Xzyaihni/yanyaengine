@@ -14,7 +14,9 @@ use pathfinder_geometry::{
     vector::{Vector2I, Vector2F}
 };
 
-use nalgebra::Vector2;
+use nalgebra::{Vector2, Vector3};
+
+use serde::{Serialize, Deserialize};
 
 use crate::{
     Object,
@@ -87,11 +89,84 @@ pub struct GlyphInfo
     pub height: u32
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum HorizontalAlign
+{
+    Left,
+    Middle,
+    Right
+}
+
+impl HorizontalAlign
+{
+    pub fn sign(self) -> f32
+    {
+        match self
+        {
+            Self::Left => -1.0,
+            Self::Middle => 0.0,
+            Self::Right => 1.0
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum VerticalAlign
+{
+    Top,
+    Middle,
+    Bottom
+}
+
+impl VerticalAlign
+{
+    pub fn sign(self) -> f32
+    {
+        match self
+        {
+            Self::Top => -1.0,
+            Self::Middle => 0.0,
+            Self::Bottom => 1.0
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextAlign
+{
+    pub horizontal: HorizontalAlign,
+    pub vertical: VerticalAlign
+}
+
+impl Default for TextAlign
+{
+    fn default() -> Self
+    {
+        Self{
+            horizontal: HorizontalAlign::Left,
+            vertical: VerticalAlign::Top
+        }
+    }
+}
+
+impl TextAlign
+{
+    pub fn centered() -> Self
+    {
+        Self{
+            horizontal: HorizontalAlign::Middle,
+            vertical: VerticalAlign::Middle
+        }
+    }
+}
+
+
 #[derive(Debug)]
 pub struct TextObject
 {
     pub object: Option<Object>,
-    pub aspect: f32
+    align: TextAlign,
+    aspect: f32
 }
 
 impl TextObject
@@ -142,6 +217,7 @@ impl TextObject
         {
             return Self{
                 object: None,
+                align: info.align,
                 aspect: 1.0
             };
         }
@@ -169,7 +245,11 @@ impl TextObject
             transform: info.transform
         });
 
-        let mut this = Self{object: Some(object), aspect};
+        let mut this = Self{
+            object: Some(object),
+            align: info.align,
+            aspect
+        };
 
         this.update_scale();
 
@@ -202,7 +282,16 @@ impl TextObject
             let new_aspect = model_size.x / model_size.y;
             let model_size = from_aspect(new_aspect);
 
-            object.set_inplace_model(Model::rectangle(model_size.x, model_size.y));
+            let shift = (Vector2::repeat(1.0) - model_size.xy()) / 2.0;
+
+            let mut model = Model::rectangle(model_size.x, model_size.y);
+            model.shift(Vector3::new(
+                shift.x * self.align.horizontal.sign(),
+                shift.y * self.align.vertical.sign(),
+                0.0
+            ));
+
+            object.set_inplace_model(model);
         }
     }
 

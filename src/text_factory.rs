@@ -12,6 +12,7 @@ use serde::{Serialize, Deserialize};
 use crate::{
     ObjectFactory,
     TextObject,
+    TextAlign,
     UniformLocation,
     ShaderId,
     transform::Transform,
@@ -86,6 +87,7 @@ pub struct TextInfo<'a>
     pub transform: Transform,
     pub font_size: u32,
     pub font: FontStyle,
+    pub align: TextAlign,
     pub text: &'a str
 }
 
