@@ -1,5 +1,4 @@
 use std::{
-    mem,
     time::Instant,
     sync::Arc
 };
@@ -672,7 +671,12 @@ fn handle_event<UserApp: YanyaApp + 'static>(
         {
             match event
             {
-                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::CloseRequested =>
+                {
+                    drop(info.user_app.take());
+
+                    event_loop.exit()
+                },
                 WindowEvent::Resized(_) => info.window_resized = true,
                 WindowEvent::CursorMoved{position, ..} =>
                 {
@@ -690,7 +694,10 @@ fn handle_event<UserApp: YanyaApp + 'static>(
 
                     let position = (position.x / width, position.y / height);
 
-                    info.user_app.as_mut().unwrap().mouse_move(position);
+                    if let Some(app) = info.user_app.as_mut()
+                    {
+                        app.mouse_move(position);
+                    }
                 },
                 WindowEvent::MouseInput{
                     button,
@@ -704,7 +711,10 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                     }
 
                     let control = Control::Mouse{button, state};
-                    info.user_app.as_mut().unwrap().input(control);
+                    if let Some(app) = info.user_app.as_mut()
+                    {
+                        app.input(control);
+                    }
                 },
                 WindowEvent::MouseWheel{delta, ..} =>
                 {
@@ -720,7 +730,10 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                     };
 
                     let control = Control::Scroll{x, y};
-                    info.user_app.as_mut().unwrap().input(control);
+                    if let Some(app) = info.user_app.as_mut()
+                    {
+                        app.input(control);
+                    }
                 },
                 WindowEvent::KeyboardInput{event, ..} =>
                 {
@@ -735,7 +748,10 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                         state: event.state
                     };
 
-                    info.user_app.as_mut().unwrap().input(control);
+                    if let Some(app) = info.user_app.as_mut()
+                    {
+                        app.input(control);
+                    }
                 },
                 _ => ()
             }
@@ -843,9 +859,12 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                         image_index
                     );
 
-                let app_init = mem::take(app_init).unwrap();
+                let app_init = app_init.take().unwrap();
                 Some(UserApp::init(init_info, app_init))
             };
+        } else if info.user_app.is_none()
+        {
+            return;
         }
 
         let run_frame_info = RunFrameInfo
