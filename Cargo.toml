@@ -14,7 +14,7 @@ serde = { version = "1.0.164", features = ["derive"] }
 strum = { version = "0.26", features = ["derive"] }
 vulkano = "0.34.1"
 vulkano-shaders = "0.34.0"
-winit = { version = "0.29.3", features = ["rwh_05"] }
+winit = { version = "0.29.3", features = ["rwh_05", "serde"] }
 font-kit = "0.13.2"
 pathfinder_geometry = "0.5.1"
 ahash = "0.8.11"

@@ -73,7 +73,7 @@ pub use allocators::UniformLocation;
 pub use object_factory::{ObjectFactory, ObjectInfo};
 pub use assets::*;
 
-pub use control::Control;
+pub use control::{KeyCodeNamed, Control};
 
 mod control;
 
