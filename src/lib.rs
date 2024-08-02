@@ -327,7 +327,8 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 {
     pub fn with_title(mut self, title: &str) -> Self
     {
-        self.window_builder = self.window_builder.with_title(title);
+        self.window_builder = self.window_builder.with_title(title)
+            .with_active(true);
 
         self
     }
