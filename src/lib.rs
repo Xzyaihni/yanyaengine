@@ -58,7 +58,7 @@ pub use text_factory::{TextInfo, FontStyle};
 
 pub use nalgebra::Vector3;
 pub use winit::{
-    keyboard::{PhysicalKey, Key, KeyCode},
+    keyboard::{PhysicalKey, Key, KeyCode, NamedKey},
     event::{ElementState, MouseButton}
 };
 
