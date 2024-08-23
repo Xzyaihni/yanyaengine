@@ -1,7 +1,6 @@
 use serde::{Serialize, Deserialize};
 
 use nalgebra::{
-	Unit,
 	Vector2,
 	Vector3
 };
@@ -10,7 +9,6 @@ use nalgebra::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transform
 {
-	pub rotation_axis: Unit<Vector3<f32>>,
 	pub rotation: f32,
 	pub position: Vector3<f32>,
 	pub scale: Vector3<f32>,
@@ -21,7 +19,6 @@ impl Default for Transform
 {
     fn default() -> Self
     {
-		let rotation_axis = Unit::new_normalize(Vector3::z());
 		let rotation = 0.0;
 
 		let position = Vector3::zeros();
@@ -29,7 +26,7 @@ impl Default for Transform
 
 		let stretch = (0.0, Vector2::new(1.0, 1.0));
 
-		Self{rotation_axis, rotation, position, scale, stretch}
+		Self{rotation, position, scale, stretch}
     }
 }
 
@@ -106,11 +103,6 @@ pub trait OnTransformCallback
 	}
 
 	fn rotation_callback(&mut self, _rotation: f32)
-	{
-		self.callback();
-	}
-
-	fn rotation_axis_callback(&mut self, _axis: Unit<Vector3<f32>>)
 	{
 		self.callback();
 	}
@@ -213,17 +205,6 @@ pub trait TransformContainer: OnTransformCallback
 	fn grow(&mut self, scale: Vector3<f32>)
 	{
 		self.set_scale(self.scale() + scale);
-	}
-
-	fn rotation_axis(&self) -> &Unit<Vector3<f32>>
-	{
-		&self.transform_ref().rotation_axis
-	}
-
-	fn set_rotation_axis(&mut self, axis: Unit<Vector3<f32>>)
-	{
-		self.transform_mut().rotation_axis = axis;
-		self.rotation_axis_callback(axis);
 	}
 
 	fn rotation(&self) -> f32

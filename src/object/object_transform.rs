@@ -1,4 +1,5 @@
 use nalgebra::{
+    Unit,
     Vector3,
     base::Matrix4
 };
@@ -48,7 +49,10 @@ impl ObjectTransform
         origin: &Vector3<f32>
     ) -> Matrix4<f32>
     {
-        let mut matrix = Matrix4::from_axis_angle(&transform.rotation_axis, transform.rotation);
+        let mut matrix = Matrix4::from_axis_angle(
+            &Unit::new_normalize(Vector3::z()),
+            transform.rotation
+        );
 
         matrix *= Self::calculate_stretch_matrix(transform);
 
