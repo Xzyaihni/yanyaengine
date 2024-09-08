@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    num::FpCategory,
+    sync::Arc
+};
 
 use parking_lot::RwLock;
 
@@ -275,7 +278,13 @@ impl TextObject
 
             let scale = object.scale();
 
-            let v = scale.y / scale.x;
+            let v = if scale.x.classify() == FpCategory::Zero
+            {
+                0.0
+            } else
+            {
+                scale.y / scale.x
+            };
 
             model_size.x *= v;
 
