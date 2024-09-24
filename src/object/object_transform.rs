@@ -1,5 +1,4 @@
 use nalgebra::{
-    Unit,
     Vector3,
     base::Matrix4
 };
@@ -50,7 +49,7 @@ impl ObjectTransform
     ) -> Matrix4<f32>
     {
         let mut matrix = Matrix4::from_axis_angle(
-            &Unit::new_normalize(Vector3::z()),
+            &Vector3::z_axis(),
             transform.rotation
         );
 
