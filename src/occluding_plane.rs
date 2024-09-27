@@ -129,10 +129,10 @@ impl OccludingPlane
         info: &mut UpdateBuffersInfo
     )
     {
-        info.object_info.partial.builder_wrapper.builder()
+        info.partial.builder_wrapper.builder()
             .update_buffer(
-                self.subbuffers[info.object_info.partial.image_index].clone(),
-                self.calculate_vertices(origin, info.object_info.projection_view)
+                self.subbuffers[info.partial.image_index].clone(),
+                self.calculate_vertices(origin, info.projection_view)
             ).unwrap();
     }
 

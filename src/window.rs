@@ -929,8 +929,6 @@ fn run_frame<UserApp: YanyaApp>(
     let delta_time = frame_info.previous_time.elapsed().as_secs_f32();
     *frame_info.previous_time = Instant::now();
 
-    user_app.update(delta_time);
-
     {
         let object_create_info = frame_info.engine
             .object_create_partial_info(
@@ -939,7 +937,7 @@ fn run_frame<UserApp: YanyaApp>(
                 frame_info.image_index
             );
 
-        user_app.update_buffers(object_create_info);
+        user_app.update(object_create_info, delta_time);
     }
 
     let clear_color = Some(options.clear_color);

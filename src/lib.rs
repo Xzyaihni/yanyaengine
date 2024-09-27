@@ -123,13 +123,11 @@ where
 
     fn mouse_move(&mut self, _position: (f64, f64)) {}
 
-    fn update(&mut self, _dt: f32) {}
+    fn update(&mut self, _info: UpdateBuffersPartialInfo, _dt: f32) {}
 
     fn draw(&mut self, _info: DrawInfo) {}
 
     fn resize(&mut self, _aspect: f32) {}
-
-    fn update_buffers(&mut self, _info: UpdateBuffersPartialInfo) {}
 
     fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
 }
