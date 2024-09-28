@@ -67,6 +67,14 @@ pub struct ObjectCreateInfo<'a>
     pub projection_view: Matrix4<f32>
 }
 
+impl ObjectCreateInfo<'_>
+{
+    pub fn update_camera(&mut self, camera: &Camera)
+    {
+        self.projection_view = camera.projection_view();
+    }
+}
+
 pub type InitPartialInfo<'a> = ObjectCreatePartialInfo<'a>;
 pub type InitInfo<'a> = ObjectCreateInfo<'a>;
 
