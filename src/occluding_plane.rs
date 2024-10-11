@@ -5,6 +5,7 @@ use vulkano::buffer::Subbuffer;
 use nalgebra::{Vector3, Vector4, Matrix4};
 
 use crate::{
+    WINDING_MATTERS,
     game_object::*,
     object::{Model, ObjectVertex, ObjectTransform},
     allocators::ObjectAllocator,
@@ -91,7 +92,7 @@ impl OccludingPlane
             i0.x * i1.y - i0.y * i1.x
         };
 
-        let clockwise = winding > 0.0;
+        let clockwise = WINDING_MATTERS && winding > 0.0;
 
         let vertices = if clockwise
         {

@@ -393,7 +393,7 @@ impl RenderInfo
                     ..Default::default()
                 }),
                 rasterization_state: Some(RasterizationState{
-                    cull_mode: CullMode::Back,
+                    cull_mode: CullMode::None,
                     ..Default::default()
                 }),
                 multisample_state: Some(MultisampleState{
