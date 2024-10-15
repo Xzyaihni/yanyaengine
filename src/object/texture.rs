@@ -115,7 +115,7 @@ impl SimpleImage
     {
         let image = image::open(filepath)?;
 
-        Self::try_from(image)
+        Ok(Self::from(image))
     }
 
     pub fn map<F>(&mut self, mut f: F)
@@ -215,21 +215,27 @@ impl SimpleImage
     }
 }
 
-impl TryFrom<DynamicImage> for SimpleImage
+impl From<DynamicImage> for SimpleImage
 {
-    type Error = ImageError;
+    fn from(other: DynamicImage) -> Self
+    {
+        Self::from(other.into_rgba8())
+    }
+}
 
-    fn try_from(other: DynamicImage) -> Result<Self, Self::Error>
+impl From<image::RgbaImage> for SimpleImage
+{
+    fn from(other: image::RgbaImage) -> Self
     {
         let width = other.width() as usize;
         let height = other.height() as usize;
 
-        let colors = other.into_rgba8().into_raw().chunks(4).map(|bytes: &[u8]|
+        let colors = other.into_raw().chunks(4).map(|bytes: &[u8]|
         {
             Color::new(bytes[0], bytes[1], bytes[2], bytes[3])
         }).collect();
 
-        Ok(Self{colors, width, height})
+        Self{colors, width, height}
     }
 }
 

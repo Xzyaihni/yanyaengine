@@ -249,13 +249,15 @@ where
     }
 }
 
+pub type ShadersQuery = Box<dyn Fn(&Path) -> ShaderId>;
+
 pub struct Assets
 {
     textures_path: Option<PathBuf>,
     textures: IdsStorage<TextureId, Arc<RwLock<Texture>>>,
 	models: IdsStorage<ModelId, Arc<RwLock<Model>>>,
     texture_location: UniformLocation,
-    shader: ShaderId
+    shaders_query: ShadersQuery
 }
 
 impl Assets
@@ -265,7 +267,7 @@ impl Assets
         textures_path: Option<TexturesPath>,
         models_path: Option<ModelsPath>,
         texture_location: UniformLocation,
-        shader: ShaderId
+        shaders_query: ShadersQuery
     ) -> Self
     where
         TexturesPath: AsRef<Path>,
@@ -276,6 +278,8 @@ impl Assets
         {
             FilesLoader::load_images(path).map(|named_value|
             {
+                let shader = shaders_query(&PathBuf::from(&named_value.name));
+
                 named_value.map(|image|
                 {
                     Texture::new(resource_uploader, image, texture_location, shader)
@@ -298,7 +302,7 @@ impl Assets
             textures,
             models,
             texture_location,
-            shader
+            shaders_query
         }
     }
 
@@ -361,14 +365,17 @@ impl Assets
     ) -> TextureId
     {
         let textures_path = self.textures_path.as_ref().expect("cant edit empty assets");
+        let filepath = textures_path.join(name);
 
-        let mut image = SimpleImage::load(textures_path.join(name)).unwrap();
+        let mut image = SimpleImage::load(&filepath).unwrap();
         f(&mut image);
+
+        let shader = (self.shaders_query)(&filepath);
 
         let texture = builder_wrapper.create_texture(
             image.into(),
             self.texture_location,
-            self.shader
+            shader
         );
 
         self.textures.insert((name.to_owned(), Arc::new(RwLock::new(texture))))

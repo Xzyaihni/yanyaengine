@@ -139,7 +139,7 @@ pub struct AppOptions
     clear_color: ClearValue,
     assets_paths: AssetsPaths,
     samples: SampleCount,
-    default_shader: Option<ShaderId>
+    shaders_query: Option<ShadersQuery>
 }
 
 impl Default for AppOptions
@@ -150,7 +150,7 @@ impl Default for AppOptions
             clear_color: [0.0, 0.0, 0.0, 1.0].into(),
             assets_paths: AssetsPaths::default(),
             samples: SampleCount::Sample2,
-            default_shader: None
+            shaders_query: None
         }
     }
 }
@@ -284,6 +284,11 @@ pub struct ShaderId(usize);
 
 impl ShaderId
 {
+    pub fn into_always_query(self) -> ShadersQuery
+    {
+        Box::new(move |_| self)
+    }
+
     pub fn get_raw(&self) -> usize
     {
         self.0
@@ -383,11 +388,11 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
     pub fn with_shaders(
         mut self,
         shaders: ShadersContainer,
-        default_shader: ShaderId
+        shaders_query: ShadersQuery
     ) -> Self
     {
         self.shaders = shaders;
-        self.options.default_shader = Some(default_shader);
+        self.options.shaders_query = Some(shaders_query);
 
         self
     }
@@ -402,7 +407,7 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
                 default_fragment::load
             ));
 
-            self.options.default_shader = Some(id);
+            self.options.shaders_query = Some(Box::new(move |_| id));
         }
 
         let window = Arc::new(self.window_builder.build(&self.event_loop).unwrap());

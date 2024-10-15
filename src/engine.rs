@@ -13,9 +13,9 @@ use vulkano::{
 use crate::{
     ObjectFactory,
     AssetsPaths,
+    ShadersQuery,
     Assets,
     UniformLocation,
-    ShaderId,
     allocators::{UniformAllocator, ObjectAllocator},
     text_factory::FontsContainer,
     game_object::*,
@@ -38,7 +38,7 @@ impl Engine
         mut resource_uploader: ResourceUploader,
         device: Arc<Device>,
         frames: usize,
-        shader: ShaderId
+        shaders_query: ShadersQuery
     ) -> Self
     {
         let assets = Assets::new(
@@ -46,7 +46,7 @@ impl Engine
             assets_paths.textures.as_ref(),
             assets_paths.models.as_ref(),
             UniformLocation{set: 0, binding: 0},
-            shader
+            shaders_query
         );
 
         let assets = Arc::new(Mutex::new(assets));

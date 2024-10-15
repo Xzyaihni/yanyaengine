@@ -846,7 +846,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                 info.render_info.resource_uploader(&mut builder),
                 info.device.clone(),
                 info.fences_amount,
-                info.options.default_shader.unwrap()
+                info.options.shaders_query.take().unwrap()
             ));
 
             info.user_app = {
