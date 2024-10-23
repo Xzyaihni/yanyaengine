@@ -418,7 +418,7 @@ impl CharsRasterizer
                 return DEFAULT_ADVANCE
             }
         };
-        
+
         let advance = match self.font.advance(id)
         {
             Ok(id) => id,
