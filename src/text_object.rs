@@ -169,7 +169,7 @@ pub struct TextObject
 {
     pub object: Option<Object>,
     align: TextAlign,
-    aspect: f32
+    size: Vector2<f32>
 }
 
 impl TextObject
@@ -211,17 +211,16 @@ impl TextObject
             .round() as i32;
 
         let height = height_single as usize * lines_count;
-
-        let aspect = full_bounds.width as f32 / height as f32;
-
         let width = full_bounds.width;
 
+        // 1920 for the height of my monitor
+        let size: Vector2<f32> = Vector2::new(width as f32, height as f32) / 1920.0;
         if width == 0 || height == 0
         {
             return Self{
                 object: None,
                 align: info.align,
-                aspect: 1.0
+                size
             };
         }
 
@@ -251,7 +250,7 @@ impl TextObject
         let mut this = Self{
             object: Some(object),
             align: info.align,
-            aspect
+            size
         };
 
         this.update_scale();
@@ -267,29 +266,24 @@ impl TextObject
             {
                 if aspect < 1.0
                 {
-                    Vector2::new(aspect, 1.0)
+                    Vector2::new(aspect.recip(), 1.0)
                 } else
                 {
-                    Vector2::new(1.0, aspect.recip())
+                    Vector2::new(1.0, aspect)
                 }
             };
 
-            let mut model_size = from_aspect(self.aspect);
-
             let scale = object.scale();
 
-            let v = if scale.x.classify() == FpCategory::Zero
+            let mut model_size = if scale.x.classify() == FpCategory::Zero || scale.y.classify() == FpCategory::Zero
             {
-                0.0
+                Vector2::zeros()
             } else
             {
-                scale.y / scale.x
+                from_aspect(scale.x / scale.y)
             };
 
-            model_size.x *= v;
-
-            let new_aspect = model_size.x / model_size.y;
-            let model_size = from_aspect(new_aspect);
+            model_size.component_mul_assign(&self.size);
 
             let shift = (Vector2::repeat(1.0) - model_size.xy()) / 2.0;
 
