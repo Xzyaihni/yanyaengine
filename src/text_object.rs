@@ -261,6 +261,11 @@ impl TextObject
         this
     }
 
+    pub fn text_size(&self) -> Vector2<f32>
+    {
+        self.size
+    }
+
     pub fn set_dynamic_scale(&mut self, dynamic_scale: Option<Vector2<f32>>)
     {
         self.dynamic_scale = dynamic_scale;
