@@ -9,6 +9,8 @@ use font_kit::{
 
 use serde::{Serialize, Deserialize};
 
+use nalgebra::Vector2;
+
 use crate::{
     ObjectFactory,
     TextObject,
@@ -88,6 +90,7 @@ pub struct TextInfo<'a>
     pub font_size: u32,
     pub font: FontStyle,
     pub align: TextAlign,
+    pub dynamic_scale: Option<Vector2<f32>>,
     pub text: &'a str
 }
 

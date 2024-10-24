@@ -169,6 +169,7 @@ pub struct TextObject
 {
     pub object: Option<Object>,
     align: TextAlign,
+    dynamic_scale: Option<Vector2<f32>>,
     size: Vector2<f32>
 }
 
@@ -220,6 +221,7 @@ impl TextObject
             return Self{
                 object: None,
                 align: info.align,
+                dynamic_scale: info.dynamic_scale,
                 size
             };
         }
@@ -250,6 +252,7 @@ impl TextObject
         let mut this = Self{
             object: Some(object),
             align: info.align,
+            dynamic_scale: info.dynamic_scale,
             size
         };
 
@@ -258,32 +261,31 @@ impl TextObject
         this
     }
 
+    pub fn set_dynamic_scale(&mut self, dynamic_scale: Option<Vector2<f32>>)
+    {
+        self.dynamic_scale = dynamic_scale;
+        self.update_scale();
+    }
+
     pub fn update_scale(&mut self)
     {
         if let Some(object) = self.object.as_mut()
         {
-            let from_aspect = |aspect: f32|
-            {
-                if aspect < 1.0
-                {
-                    Vector2::new(aspect.recip(), 1.0)
-                } else
-                {
-                    Vector2::new(1.0, aspect)
-                }
-            };
-
             let scale = object.scale();
 
-            let mut model_size = if scale.x.classify() == FpCategory::Zero || scale.y.classify() == FpCategory::Zero
+            let model_size = if scale.x.classify() == FpCategory::Zero || scale.y.classify() == FpCategory::Zero
             {
                 Vector2::zeros()
             } else
             {
-                from_aspect(scale.x / scale.y)
+                if let Some(starting) = self.dynamic_scale
+                {
+                    self.size.component_div(&starting)
+                } else
+                {
+                    self.size.component_div(&scale.xy())
+                }
             };
-
-            model_size.component_mul_assign(&self.size);
 
             let shift = (Vector2::repeat(1.0) - model_size.xy()) / 2.0;
 
