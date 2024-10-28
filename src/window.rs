@@ -692,7 +692,7 @@ fn handle_event<UserApp: YanyaApp + 'static>(
                         return;
                     }
 
-                    let position = (position.x / width, position.y / height);
+                    let position = ((position.x / width).clamp(0.0, 1.0), (position.y / height).clamp(0.0, 1.0));
 
                     if let Some(app) = info.user_app.as_mut()
                     {
