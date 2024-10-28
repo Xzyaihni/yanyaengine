@@ -17,10 +17,11 @@ use crate::{
     TextAlign,
     UniformLocation,
     ShaderId,
-    transform::Transform,
     text_object::CharsRasterizer,
     object::resource_uploader::ResourceUploader
 };
+
+pub use crate::text_object::TextCreateInfo;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +69,11 @@ impl FontsContainer
         Self{font_textures}
     }
 
+    pub fn calculate_bounds(&self, info: TextInfo) -> Vector2<f32>
+    {
+        TextObject::calculate_bounds(info, self)
+    }
+
     pub fn len(&self) -> usize
     {
         self.font_textures.len()
@@ -78,19 +84,17 @@ impl FontsContainer
         self.font_textures.is_empty()
     }
 
-    pub fn get_mut(&mut self, font: FontStyle) -> Option<&mut CharsRasterizer>
+    pub fn get(&self, font: FontStyle) -> Option<&CharsRasterizer>
     {
-        self.font_textures.get_mut(font as usize)
+        self.font_textures.get(font as usize)
     }
 }
 
 pub struct TextInfo<'a>
 {
-    pub transform: Transform,
     pub font_size: u32,
     pub font: FontStyle,
     pub align: TextAlign,
-    pub dynamic_scale: Option<Vector2<f32>>,
     pub text: &'a str
 }
 
@@ -98,7 +102,7 @@ pub struct TextFactory<'a, 'b: 'a>
 {
     resource_uploader: &'a mut ResourceUploader<'b>,
     object_factory: Rc<ObjectFactory>,
-    fonts_container: &'a mut FontsContainer
+    fonts_container: &'a FontsContainer
 }
 
 impl<'a, 'b: 'a> TextFactory<'a, 'b>
@@ -106,7 +110,7 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
     pub fn new(
         resource_uploader: &'a mut ResourceUploader<'b>,
         object_factory: Rc<ObjectFactory>,
-        fonts_container: &'a mut FontsContainer
+        fonts_container: &'a FontsContainer
     ) -> Self
     {
         Self{resource_uploader, object_factory, fonts_container}
@@ -116,16 +120,14 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
         &mut self,
         location: UniformLocation,
         shader: ShaderId,
-        info: TextInfo
+        info: TextCreateInfo
     ) -> TextObject
     {
-        let style = info.font;
-
         TextObject::new(
             self.resource_uploader,
             &self.object_factory,
             info,
-            self.fonts_container.get_mut(style).expect("all font styles must exist"),
+            self.fonts_container,
             location,
             shader
         )

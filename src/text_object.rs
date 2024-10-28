@@ -25,6 +25,7 @@ use crate::{
     Object,
     ObjectFactory,
     TextInfo,
+    FontsContainer,
     ObjectInfo,
     UniformLocation,
     ShaderId,
@@ -134,7 +135,7 @@ impl VerticalAlign
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TextAlign
 {
     pub horizontal: HorizontalAlign,
@@ -163,6 +164,12 @@ impl TextAlign
     }
 }
 
+pub struct TextCreateInfo<'a>
+{
+    pub transform: Transform,
+    pub dynamic_scale: Option<Vector2<f32>>,
+    pub inner: TextInfo<'a>
+}
 
 #[derive(Debug)]
 pub struct TextObject
@@ -178,12 +185,73 @@ impl TextObject
     pub fn new(
         resource_uploader: &mut ResourceUploader,
         object_factory: &ObjectFactory,
-        info: TextInfo,
-        current_font: &mut CharsRasterizer,
+        info: TextCreateInfo,
+        fonts: &FontsContainer,
         location: UniformLocation,
         shader: ShaderId
     ) -> Self
     {
+        let current_font = fonts.get(info.inner.font).expect("style must exist");
+
+        let align = info.inner.align.clone();
+        let font_size = info.inner.font_size;
+
+        let (chars_info, size, height_single) = Self::calculate_bounds_pixels(info.inner, fonts);
+
+        let global_size = Self::bounds_to_global(size);
+
+        if size.x == 0 || size.y == 0
+        {
+            return Self{
+                object: None,
+                align,
+                dynamic_scale: info.dynamic_scale,
+                size: global_size
+            };
+        }
+
+        let mut text_canvas = Canvas::new(
+            Vector2I::new(size.x, size.y),
+            Format::A8
+        );
+
+        chars_info.into_iter().for_each(|(x, y, c)|
+        {
+            current_font.render_glyph(
+                &mut text_canvas,
+                height_single,
+                font_size,
+                x,
+                y,
+                c
+            );
+        });
+
+        let object = object_factory.create(ObjectInfo{
+            model: Arc::new(RwLock::new(Model::square(1.0))),
+            texture: Self::canvas_to_texture(resource_uploader, text_canvas, location, shader),
+            transform: info.transform
+        });
+
+        let mut this = Self{
+            object: Some(object),
+            align,
+            dynamic_scale: info.dynamic_scale,
+            size: global_size
+        };
+
+        this.update_scale();
+
+        this
+    }
+
+    pub fn calculate_bounds_pixels(
+        info: TextInfo,
+        fonts: &FontsContainer
+    ) -> (Vec<(i32, usize, char)>, Vector2<i32>, i32)
+    {
+        let current_font = fonts.get(info.font).expect("style must exist");
+
         let mut full_bounds = BoundsCalculator::new();
 
         let lines_count = info.text.lines().count();
@@ -211,54 +279,27 @@ impl TextObject
         let height_single = (height_font / metrics.units_per_em as f32 * info.font_size as f32)
             .round() as i32;
 
-        let height = height_single as usize * lines_count;
+        let height = height_single * lines_count as i32;
         let width = full_bounds.width;
 
+        (chars_info, Vector2::new(width, height), height_single)
+    }
+
+    pub fn bounds_to_global(bounds: Vector2<i32>) -> Vector2<f32>
+    {
+        let v: Vector2<f32> = bounds.cast();
+
         // 1920 for the height of my monitor
-        let size: Vector2<f32> = Vector2::new(width as f32, height as f32) / 1920.0;
-        if width == 0 || height == 0
-        {
-            return Self{
-                object: None,
-                align: info.align,
-                dynamic_scale: info.dynamic_scale,
-                size
-            };
-        }
+        // its not pixel perfect anyway so why bother getting actual resolution
+        v / 1920.0
+    }
 
-        let mut text_canvas = Canvas::new(
-            Vector2I::new(width, height as i32),
-            Format::A8
-        );
-
-        chars_info.into_iter().for_each(|(x, y, c)|
-        {
-            current_font.render_glyph(
-                &mut text_canvas,
-                height_single,
-                info.font_size,
-                x,
-                y,
-                c
-            );
-        });
-
-        let object = object_factory.create(ObjectInfo{
-            model: Arc::new(RwLock::new(Model::square(1.0))),
-            texture: Self::canvas_to_texture(resource_uploader, text_canvas, location, shader),
-            transform: info.transform
-        });
-
-        let mut this = Self{
-            object: Some(object),
-            align: info.align,
-            dynamic_scale: info.dynamic_scale,
-            size
-        };
-
-        this.update_scale();
-
-        this
+    pub fn calculate_bounds(
+        info: TextInfo,
+        fonts: &FontsContainer
+    ) -> Vector2<f32>
+    {
+        Self::bounds_to_global(Self::calculate_bounds_pixels(info, fonts).1)
     }
 
     pub fn text_size(&self) -> Vector2<f32>
@@ -324,7 +365,7 @@ impl TextObject
     }
 
     fn with_font(
-        rasterizer: &mut CharsRasterizer,
+        rasterizer: &CharsRasterizer,
         bounds_calculator: &mut BoundsCalculator,
         font_size: u32,
         c: char

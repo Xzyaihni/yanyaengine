@@ -54,7 +54,7 @@ pub use object::{
 pub use occluding_plane::OccludingPlane;
 
 pub use text_object::{TextAlign, VerticalAlign, HorizontalAlign, TextObject};
-pub use text_factory::{TextInfo, FontStyle};
+pub use text_factory::{TextInfo, TextCreateInfo, FontStyle, FontsContainer};
 
 pub use nalgebra::Vector3;
 pub use winit::{
@@ -118,7 +118,7 @@ where
     Self: Sized
 {
     type AppInfo: Default;
-    
+
     fn init(info: InitPartialInfo, app_info: Self::AppInfo) -> Self;
 
     fn input(&mut self, _control: Control) {}

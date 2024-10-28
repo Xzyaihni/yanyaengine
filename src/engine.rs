@@ -25,7 +25,7 @@ use crate::{
 
 pub struct Engine
 {
-    fonts_info: FontsContainer,
+    fonts_info: Rc<FontsContainer>,
     object_factory: Rc<ObjectFactory>,
     uniform_allocator: Rc<UniformAllocator>,
     assets: Arc<Mutex<Assets>>
@@ -58,7 +58,7 @@ impl Engine
         let object_factory = ObjectFactory::new(allocator);
         let object_factory = Rc::new(object_factory);
 
-        let fonts_info = FontsContainer::new();
+        let fonts_info = Rc::new(FontsContainer::new());
 
         Self{fonts_info, object_factory, uniform_allocator, assets}
     }
@@ -73,7 +73,7 @@ impl Engine
         let builder_wrapper = BuilderWrapper::new(
             resource_uploader,
             self.object_factory.clone(),
-            &mut self.fonts_info
+            self.fonts_info.clone()
         );
 
         ObjectCreatePartialInfo{

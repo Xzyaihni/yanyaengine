@@ -1,9 +1,12 @@
 use std::rc::Rc;
 
+use nalgebra::Vector2;
+
 use super::CommandBuilderType;
 
 use crate::{
     TextInfo,
+    TextCreateInfo,
     TextObject,
     ObjectFactory,
     UniformLocation,
@@ -17,7 +20,7 @@ pub struct BuilderWrapper<'a>
 {
     resource_uploader: ResourceUploader<'a>,
     object_factory: Rc<ObjectFactory>,
-    fonts_info: &'a mut FontsContainer
+    fonts: Rc<FontsContainer>
 }
 
 impl<'a> BuilderWrapper<'a>
@@ -25,10 +28,15 @@ impl<'a> BuilderWrapper<'a>
     pub fn new(
         resource_uploader: ResourceUploader<'a>,
         object_factory: Rc<ObjectFactory>,
-        fonts_info: &'a mut FontsContainer
+        fonts: Rc<FontsContainer>
     ) -> Self
     {
-        Self{resource_uploader, object_factory, fonts_info}
+        Self{resource_uploader, object_factory, fonts}
+    }
+
+    pub fn fonts(&self) -> &Rc<FontsContainer>
+    {
+        &self.fonts
     }
 
     pub fn resource_uploader<'b>(&'b mut self) -> &'b mut ResourceUploader<'a>
@@ -48,7 +56,7 @@ impl<'a> BuilderWrapper<'a>
         TextFactory::new(
             &mut self.resource_uploader,
             self.object_factory.clone(),
-            self.fonts_info
+            &self.fonts
         )
     }
 
@@ -64,11 +72,19 @@ impl<'a> BuilderWrapper<'a>
 
     pub fn create_text(
         &mut self,
-        info: TextInfo,
+        info: TextCreateInfo,
         location: UniformLocation,
         shader: ShaderId
     ) -> TextObject
     {
         self.text_factory().create(location, shader, info)
+    }
+
+    pub fn text_bounds(
+        &self,
+        info: TextInfo
+    ) -> Vector2<f32>
+    {
+        TextObject::calculate_bounds(info, &self.fonts)
     }
 }
