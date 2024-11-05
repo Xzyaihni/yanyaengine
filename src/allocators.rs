@@ -32,16 +32,12 @@ type ThisMemoryAllocator = GenericMemoryAllocator<FreeListAllocator>;
 #[derive(Debug)]
 pub struct ObjectAllocator
 {
-	allocator: SubbufferAllocator,
-	frames: usize
+	allocator: SubbufferAllocator
 }
 
 impl ObjectAllocator
 {
-	pub fn new(
-        allocator: Arc<ThisMemoryAllocator>,
-        frames: usize
-    ) -> Self
+	pub fn new(allocator: Arc<ThisMemoryAllocator>) -> Self
 	{
 		let allocator = SubbufferAllocator::new(
 			allocator,
@@ -53,20 +49,12 @@ impl ObjectAllocator
 			}
 		);
 
-		Self{allocator, frames}
+		Self{allocator}
 	}
 
-	pub fn subbuffers(&self, model: &Model) -> Box<[Subbuffer<[ObjectVertex]>]>
+	pub fn subbuffer(&self, model: &Model) -> Subbuffer<[ObjectVertex]>
 	{
-		(0..self.frames).map(|_|
-		{
-			self.allocator.allocate_slice(model.vertices.len() as u64).unwrap()
-		}).collect::<Box<[_]>>()
-	}
-
-	pub fn subbuffers_amount(&self) -> usize
-	{
-		self.frames
+		self.allocator.allocate_slice(model.vertices.len() as u64).unwrap()
 	}
 }
 

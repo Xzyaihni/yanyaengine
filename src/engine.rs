@@ -37,7 +37,6 @@ impl Engine
         assets_paths: &AssetsPaths,
         mut resource_uploader: ResourceUploader,
         device: Arc<Device>,
-        frames: usize,
         shaders_query: ShadersQuery
     ) -> Self
     {
@@ -52,7 +51,7 @@ impl Engine
         let assets = Arc::new(Mutex::new(assets));
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device));
-        let allocator = ObjectAllocator::new(memory_allocator.clone(), frames);
+        let allocator = ObjectAllocator::new(memory_allocator.clone());
         let uniform_allocator = Rc::new(UniformAllocator::new(memory_allocator));
 
         let object_factory = ObjectFactory::new(allocator);
@@ -66,8 +65,7 @@ impl Engine
     pub fn object_create_partial_info<'a>(
         &'a mut self,
         resource_uploader: ResourceUploader<'a>,
-        size: [f32; 2],
-        image_index: usize
+        size: [f32; 2]
     ) -> ObjectCreatePartialInfo<'a>
     {
         let builder_wrapper = BuilderWrapper::new(
@@ -81,19 +79,17 @@ impl Engine
             assets: self.assets.clone(),
             object_factory: self.object_factory.clone(),
             uniform_allocator: self.uniform_allocator.clone(),
-            size,
-            image_index
+            size
         }
     }
 
     pub fn init_partial_info<'a>(
         &'a mut self,
         resource_uploader: ResourceUploader<'a>,
-        size: [f32; 2],
-        image_index: usize
+        size: [f32; 2]
     ) -> InitPartialInfo<'a>
     {
-        self.object_create_partial_info(resource_uploader, size, image_index)
+        self.object_create_partial_info(resource_uploader, size)
     }
 
     pub fn swap_pipelines(&mut self, resource_uploader: &ResourceUploader)

@@ -16,7 +16,7 @@ use crate::{
 pub struct OccludingPlane
 {
     transform: ObjectTransform,
-    subbuffers: Box<[Subbuffer<[ObjectVertex]>]>
+    subbuffer: Subbuffer<[ObjectVertex]>
 }
 
 #[allow(dead_code)]
@@ -36,11 +36,11 @@ impl OccludingPlane
         allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffers = allocator.subbuffers(&Model::square(1.0));
+        let subbuffer = allocator.subbuffer(&Model::square(1.0));
 
         Self{
             transform,
-            subbuffers
+            subbuffer
         }
     }
 
@@ -132,7 +132,7 @@ impl OccludingPlane
     {
         info.partial.builder_wrapper.builder()
             .update_buffer(
-                self.subbuffers[info.partial.image_index].clone(),
+                self.subbuffer.clone(),
                 self.calculate_vertices(origin, info.projection_view)
             ).unwrap();
     }
@@ -142,7 +142,7 @@ impl OccludingPlane
         let square_vertices = Model::square(1.0).vertices.len() as u32;
 
         info.object_info.builder_wrapper.builder()
-            .bind_vertex_buffers(0, self.subbuffers[info.object_info.image_index].clone())
+            .bind_vertex_buffers(0, self.subbuffer.clone())
             .unwrap()
             .draw(square_vertices, 1, 0, 0)
             .unwrap();

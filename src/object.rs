@@ -50,7 +50,7 @@ pub struct Object
     model: Arc<RwLock<Model>>,
     texture: Arc<RwLock<Texture>>,
     transform: ObjectTransform,
-    subbuffers: Box<[Subbuffer<[ObjectVertex]>]>
+    subbuffer: Subbuffer<[ObjectVertex]>
 }
 
 #[allow(dead_code)]
@@ -74,13 +74,13 @@ impl Object
         allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffers = allocator.subbuffers(&model.read());
+        let subbuffer = allocator.subbuffer(&model.read());
 
         Self{
             model,
             texture,
             transform,
-            subbuffers
+            subbuffer
         }
     }
 
@@ -143,7 +143,7 @@ impl GameObject for Object
 
         info.partial.builder_wrapper.builder()
             .update_buffer(
-                self.subbuffers[info.partial.image_index].clone(),
+                self.subbuffer.clone(),
                 self.calculate_vertices(info.projection_view)
             ).unwrap();
     }
@@ -166,7 +166,7 @@ impl GameObject for Object
                 self.texture.read().descriptor_set()
             )
             .unwrap()
-            .bind_vertex_buffers(0, self.subbuffers[info.object_info.image_index].clone())
+            .bind_vertex_buffers(0, self.subbuffer.clone())
             .unwrap()
             .draw(size, 1, 0, 0)
             .unwrap();

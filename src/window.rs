@@ -12,7 +12,7 @@ use vulkano::{
     shader::EntryPoint,
     sync::{
         GpuFuture,
-        future::{JoinFuture, FenceSignalFuture}
+        future::FenceSignalFuture
     },
     pipeline::{
         Pipeline,
@@ -146,7 +146,7 @@ struct RenderInfo
 {
     pub device: Arc<Device>,
     pub swapchain: Arc<Swapchain>,
-    pub framebuffers: Vec<Arc<Framebuffer>>,
+    pub framebuffers: Box<[Arc<Framebuffer>]>,
     pub pipelines: Vec<PipelineInfo>,
     pub viewport: Viewport,
     pub surface: Arc<Surface>,
@@ -184,20 +184,13 @@ impl RenderInfo
 
         let dimensions = Self::surface_size_associated(&surface);
 
-        let image_count = capabilities.min_image_count.max(2);
-        let min_image_count = match capabilities.max_image_count
-        {
-            None => image_count,
-            Some(max_images) => image_count.min(max_images)
-        };
-
         eprintln!("framebuffer format: {image_format:?}");
 
         let (swapchain, images) = Swapchain::new(
             device.clone(),
             surface.clone(),
             SwapchainCreateInfo{
-                min_image_count,
+                min_image_count: capabilities.min_image_count.max(2),
                 image_format,
                 image_extent: dimensions.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST,
@@ -308,7 +301,7 @@ impl RenderInfo
         samples: SampleCount,
         images: impl Iterator<Item=Arc<Image>>,
         render_pass: Arc<RenderPass>
-    ) -> Vec<Arc<Framebuffer>>
+    ) -> Box<[Arc<Framebuffer>]>
     {
         images.map(|image|
         {
@@ -362,7 +355,7 @@ impl RenderInfo
                     ..Default::default()
                 }
             ).unwrap()
-        }).collect::<Vec<_>>()
+        }).collect()
     }
 
 
@@ -525,18 +518,12 @@ pub struct GraphicsInfo
     pub queues: Vec<Arc<Queue>>
 }
 
-// peeling back an onion layer by layer and crying profusely
-type FencesType = Box<[Option<FencesTypeInner>]>;
-type FencesTypeInner = Arc<FenceSignalFuture<PresentFuture<FencesTypeFuture>>>;
-type FencesTypeFuture = CommandBufferExecFuture<JoinFuture<Box<(dyn GpuFuture + 'static)>, SwapchainAcquireFuture>>;
-
 // stupid code duplication but im lazy wutever
 struct HandleEventInfoRaw
 {
     command_allocator: StandardCommandBufferAllocator,
     queue: Arc<Queue>,
-    fences: FencesType,
-    fences_amount: usize,
+    fence: FutureType,
     device: Arc<Device>,
     render_info: RenderInfo,
     options: AppOptions
@@ -546,15 +533,13 @@ struct HandleEventInfo<UserApp>
 {
     command_allocator: StandardCommandBufferAllocator,
     queue: Arc<Queue>,
-    fences: FencesType,
-    fences_amount: usize,
+    fence: FutureType,
     device: Arc<Device>,
     render_info: RenderInfo,
     options: AppOptions,
     engine: Option<Engine>,
     user_app: Option<UserApp>,
     previous_time: Instant,
-    previous_frame_index: usize,
     initialized: bool,
     recreate_swapchain: bool,
     window_resized: bool
@@ -567,15 +552,13 @@ impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
         Self{
             command_allocator: value.command_allocator,
             queue: value.queue,
-            fences: value.fences,
-            fences_amount: value.fences_amount,
+            fence: value.fence,
             device: value.device,
             render_info: value.render_info,
             options: value.options,
             engine: None,
             user_app: None,
             previous_time: Instant::now(),
-            previous_frame_index: 0,
             initialized: false,
             recreate_swapchain: false,
             window_resized: false
@@ -629,12 +612,9 @@ pub fn run<UserApp: YanyaApp + 'static>(
         composite_alpha
     );
 
-    let fences_amount = render_info.framebuffers.len();
-
     let mut handle_info: HandleEventInfo<UserApp> = HandleEventInfo::from(
         HandleEventInfoRaw{
-            fences_amount,
-            fences: vec![None; fences_amount].into_boxed_slice(),
+            fence: None,
             command_allocator: StandardCommandBufferAllocator::new(
                 info.device.clone(),
                 Default::default()
@@ -835,8 +815,6 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
 
     if let Some((image_index, suboptimal, acquire_future)) = acquired
     {
-        let image_index = image_index as usize;
-
         if !info.initialized
         {
             info.initialized = true;
@@ -845,7 +823,6 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                 &info.options.assets_paths,
                 info.render_info.resource_uploader(&mut builder),
                 info.device.clone(),
-                info.fences_amount,
                 info.options.shaders_query.take().unwrap()
             ));
 
@@ -855,8 +832,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                     .unwrap()
                     .init_partial_info(
                         info.render_info.resource_uploader(&mut builder),
-                        info.render_info.size(),
-                        image_index
+                        info.render_info.size()
                     );
 
                 let app_init = app_init.take().unwrap();
@@ -871,7 +847,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
         {
             engine: info.engine.as_mut().unwrap(),
             builder,
-            image_index,
+            image_index: image_index as usize,
             render_info: &mut info.render_info,
             previous_time: &mut info.previous_time
         };
@@ -882,33 +858,33 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             &info.options
         );
 
+        if let Some(fence) = info.fence.as_mut()
+        {
+            fence.cleanup_finished();
+        }
+
         info.recreate_swapchain |= suboptimal;
         info.recreate_swapchain |= execute_builder(
-            info.device.clone(),
             info.queue.clone(),
             info.render_info.swapchain.clone(),
-            &mut info.fences,
+            &mut info.fence,
             FrameData{
                 command_buffer,
-                image_index,
-                previous_frame_index: info.previous_frame_index,
-                acquire_future
+                acquire_future,
+                image_index
             }
         );
-
-        info.previous_frame_index = image_index;
     }
 }
 
-type FutureInner = PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>;
+type FutureInner = PresentFuture<CommandBufferExecFuture<SwapchainAcquireFuture>>;
 type FutureType = Option<Arc<FenceSignalFuture<FutureInner>>>;
 
 struct FrameData
 {
     command_buffer: Arc<PrimaryAutoCommandBuffer>,
-    image_index: usize,
-    previous_frame_index: usize,
-    acquire_future: SwapchainAcquireFuture
+    acquire_future: SwapchainAcquireFuture,
+    image_index: u32
 }
 
 struct RunFrameInfo<'a>
@@ -933,8 +909,7 @@ fn run_frame<UserApp: YanyaApp>(
         let object_create_info = frame_info.engine
             .object_create_partial_info(
                 frame_info.render_info.resource_uploader(&mut frame_info.builder),
-                frame_info.render_info.size(),
-                frame_info.image_index
+                frame_info.render_info.size()
             );
 
         user_app.update(object_create_info, delta_time);
@@ -970,8 +945,7 @@ fn run_frame<UserApp: YanyaApp>(
         let object_create_info = frame_info.engine
             .object_create_partial_info(
                 frame_info.render_info.resource_uploader(&mut frame_info.builder),
-                frame_info.render_info.size(),
-                frame_info.image_index
+                frame_info.render_info.size()
             );
 
         let draw_info = DrawInfo::new(
@@ -987,51 +961,30 @@ fn run_frame<UserApp: YanyaApp>(
 }
 
 fn execute_builder(
-    device: Arc<Device>,
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
-    fences: &mut [FutureType],
+    fence: &mut FutureType,
     frame_data: FrameData
 ) -> bool
 {
     let FrameData{
         command_buffer,
-        image_index,
-        previous_frame_index,
-        acquire_future
+        acquire_future,
+        image_index
     } = frame_data;
 
-    if let Some(fence) = &fences[image_index]
-    {
-        fence.wait(None).unwrap();
-    }
+    fence.take();
 
-    let previous_fence = match &fences[previous_frame_index]
-    {
-        Some(fence) => fence.clone().boxed(),
-        None =>
-        {
-            let mut now = vulkano::sync::now(device);
-            now.cleanup_finished();
-
-            now.boxed()
-        }
-    };
-
-    let fence = previous_fence
-        .join(acquire_future)
+    let current_fence = acquire_future
         .then_execute(queue.clone(), command_buffer)
         .unwrap()
         .then_swapchain_present(
             queue,
-            SwapchainPresentInfo::swapchain_image_index(
-                swapchain,
-                image_index as u32
-            )
+            SwapchainPresentInfo::swapchain_image_index(swapchain, image_index)
         ).then_signal_fence_and_flush();
 
     let mut recreate_swapchain = false;
-    fences[image_index] = match fence
+    *fence = match current_fence
     {
         #[allow(clippy::arc_with_non_send_sync)]
         Ok(fence) => Some(Arc::new(fence)),
@@ -1048,9 +1001,7 @@ fn execute_builder(
                 Validated::ValidationError(x) => format!("error validating {x}")
             };
 
-            eprintln!("error flushing future: {e}");
-
-            None
+            panic!("error flushing future: {e}")
         }
     };
 
