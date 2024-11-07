@@ -6,7 +6,7 @@ use std::{
 use vulkano::{
     Validated,
     VulkanError,
-    format::{Format, NumericFormat},
+    format::{Format, NumericFormat, ClearValue},
     memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     descriptor_set::allocator::StandardDescriptorSetAllocator,
     shader::EntryPoint,
@@ -36,7 +36,6 @@ use vulkano::{
         Image,
         ImageType,
         ImageCreateInfo,
-        SampleCount,
         view::ImageView,
         sampler::{
             Filter,
@@ -141,6 +140,76 @@ impl PipelineCreateInfo
     }
 }
 
+pub type AttachmentCreator = Box<dyn Fn(Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
+pub type RenderPassCreator = Box<dyn FnOnce(Arc<Device>, Format) -> Arc<RenderPass>>;
+
+pub struct Rendering
+{
+    pub attachments: AttachmentCreator,
+    pub render_pass: RenderPassCreator,
+    pub clear: Vec<Option<ClearValue>>
+}
+
+impl Rendering
+{
+    pub fn new_default(
+        clear_color: ClearValue
+    ) -> Self
+    {
+        let attachments = Box::new(|allocator: Arc<StandardMemoryAllocator>, view: Arc<ImageView>|
+        {
+            let depth_image = Image::new(
+                allocator,
+                ImageCreateInfo{
+                    image_type: ImageType::Dim2d,
+                    format: Format::D16_UNORM,
+                    extent: view.image().extent(),
+                    usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default()
+            ).unwrap();
+
+            let depth = ImageView::new_default(depth_image).unwrap();
+
+            vec![view, depth]
+        });
+
+        let render_pass = Box::new(|device, image_format|
+        {
+            vulkano::single_pass_renderpass!(
+                device,
+                attachments: {
+                    color: {
+                        format: image_format,
+                        samples: 1,
+                        load_op: Clear,
+                        store_op: Store
+                    },
+                    depth: {
+                        format: Format::D16_UNORM,
+                        samples: 1,
+                        load_op: Clear,
+                        store_op: DontCare
+                    }
+                },
+                pass: {
+                    color: [color],
+                    depth_stencil: {depth}
+                }
+            ).unwrap()
+        });
+
+        let clear = vec![Some(clear_color), Some(1.0.into())];
+
+        Self{
+            attachments,
+            render_pass,
+            clear
+        }
+    }
+}
+
 // just put everything in 1 place who cares lmao
 struct RenderInfo
 {
@@ -152,24 +221,26 @@ struct RenderInfo
     pub surface: Arc<Surface>,
     pub render_pass: Arc<RenderPass>,
     pub sampler: Arc<Sampler>,
-    pub samples: SampleCount,
+    pub clear_values: Vec<Option<ClearValue>>,
     pipeline_infos: Vec<PipelineCreateInfo>,
     pub memory_allocator: Arc<StandardMemoryAllocator>,
-    descriptor_allocator: Arc<StandardDescriptorSetAllocator>
+    descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
+    attachment_creator: AttachmentCreator
 }
 
 impl RenderInfo
 {
     pub fn new(
-        device: Arc<Device>,
-        surface: Arc<Surface>,
-        pipeline_infos: Vec<PipelineCreateInfo>,
-        samples: SampleCount,
+        info: GraphicsInfo,
         capabilities: SurfaceCapabilities,
         image_format: Format,
         composite_alpha: CompositeAlpha
     ) -> Self
     {
+        let device = info.device;
+        let surface = info.surface;
+        let pipeline_infos = info.pipeline_infos;
+
         let sampler = Sampler::new(
             device.clone(),
             SamplerCreateInfo{
@@ -199,66 +270,15 @@ impl RenderInfo
             }
         ).unwrap();
 
-        let render_pass = if let SampleCount::Sample1 = samples
-        {
-            vulkano::single_pass_renderpass!(
-                device.clone(),
-                attachments: {
-                    color: {
-                        format: image_format,
-                        samples: 1,
-                        load_op: Clear,
-                        store_op: Store
-                    },
-                    depth: {
-                        format: Format::D16_UNORM,
-                        samples: 1,
-                        load_op: Clear,
-                        store_op: DontCare
-                    }
-                },
-                pass: {
-                    color: [color],
-                    depth_stencil: {depth}
-                }
-            )
-        } else
-        {
-            vulkano::single_pass_renderpass!(
-                device.clone(),
-                attachments: {
-                    multisampled: {
-                        format: image_format,
-                        samples: samples as u32,
-                        load_op: Clear,
-                        store_op: DontCare
-                    },
-                    color: {
-                        format: image_format,
-                        samples: 1,
-                        load_op: DontCare,
-                        store_op: Store
-                    },
-                    depth: {
-                        format: Format::D16_UNORM,
-                        samples: 1,
-                        load_op: Clear,
-                        store_op: DontCare
-                    }
-                },
-                pass: {
-                    color: [multisampled],
-                    color_resolve: [color],
-                    depth_stencil: {depth}
-                }
-            )
-        }.unwrap();
+        let render_pass = (info.rendering.render_pass)(device.clone(), image_format);
+
+        let attachment_creator = info.rendering.attachments;
 
         let framebuffers = Self::framebuffers(
             memory_allocator.clone(),
-            samples,
             images.into_iter(),
-            render_pass.clone()
+            render_pass.clone(),
+            &attachment_creator
         );
 
         let viewport = Viewport{
@@ -288,65 +308,27 @@ impl RenderInfo
             viewport,
             surface,
             render_pass,
-            samples,
             sampler,
+            clear_values: info.rendering.clear,
             pipeline_infos,
             memory_allocator,
-            descriptor_allocator
+            descriptor_allocator,
+            attachment_creator
         }
     }
 
     pub fn framebuffers(
         memory_allocator: Arc<StandardMemoryAllocator>,
-        samples: SampleCount,
         images: impl Iterator<Item=Arc<Image>>,
-        render_pass: Arc<RenderPass>
+        render_pass: Arc<RenderPass>,
+        attachments: &AttachmentCreator
     ) -> Box<[Arc<Framebuffer>]>
     {
         images.map(|image|
         {
-            let format = image.format();
-            let extent = image.extent();
-
             let view = ImageView::new_default(image).unwrap();
 
-            let depth_image = Image::new(
-                memory_allocator.clone(),
-                ImageCreateInfo{
-                    image_type: ImageType::Dim2d,
-                    format: Format::D16_UNORM,
-                    extent,
-                    usage: ImageUsage::TRANSIENT_ATTACHMENT | ImageUsage::DEPTH_STENCIL_ATTACHMENT,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default()
-            ).unwrap();
-
-            let depth = ImageView::new_default(depth_image).unwrap();
-
-            let attachments = if let SampleCount::Sample1 = samples
-            {
-                vec![view, depth]
-            } else
-            {
-                // im not sure if i need one for each swapchain image or if they can share??
-                let multisampled_image = Image::new(
-                    memory_allocator.clone(),
-                    ImageCreateInfo{
-                        image_type: ImageType::Dim2d,
-                        format,
-                        extent,
-                        usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                        samples,
-                        ..Default::default()
-                    },
-                    AllocationCreateInfo::default()
-                ).unwrap();
-
-                let multisampled = ImageView::new_default(multisampled_image).unwrap();
-
-                vec![multisampled, view, depth]
-            };
+            let attachments = attachments(memory_allocator.clone(), view);
 
             Framebuffer::new(
                 render_pass.clone(),
@@ -357,7 +339,6 @@ impl RenderInfo
             ).unwrap()
         }).collect()
     }
-
 
     fn generate_pipeline(
         shader: &PipelineCreateInfo,
@@ -462,9 +443,9 @@ impl RenderInfo
         self.swapchain = new_swapchain;
         self.framebuffers = Self::framebuffers(
             self.memory_allocator.clone(),
-            self.samples,
             new_images.into_iter(),
-            self.render_pass.clone()
+            self.render_pass.clone(),
+            &self.attachment_creator
         );
 
         if redraw_window
@@ -510,12 +491,11 @@ impl RenderInfo
 pub struct GraphicsInfo
 {
     pub surface: Arc<Surface>,
-    pub event_loop: EventLoop<()>,
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub pipeline_infos: Vec<PipelineCreateInfo>,
-    pub samples: SampleCount,
-    pub queues: Vec<Arc<Queue>>
+    pub queues: Vec<Arc<Queue>>,
+    pub rendering: Rendering
 }
 
 // stupid code duplication but im lazy wutever
@@ -568,6 +548,7 @@ impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
 
 pub fn run<UserApp: YanyaApp + 'static>(
     info: GraphicsInfo,
+    event_loop: EventLoop<()>,
     options: AppOptions,
     app_init: UserApp::AppInfo
 )
@@ -602,11 +583,11 @@ pub fn run<UserApp: YanyaApp + 'static>(
             && *colorspace == ColorSpace::SrgbNonLinear
     }).unwrap_or_else(|| &formats[0]).0;
 
+    let device = info.device.clone();
+    let queue = info.queues[0].clone();
+
     let render_info = RenderInfo::new(
-        info.device.clone(),
-        info.surface.clone(),
-        info.pipeline_infos,
-        info.samples,
+        info,
         capabilities,
         image_format,
         composite_alpha
@@ -616,20 +597,20 @@ pub fn run<UserApp: YanyaApp + 'static>(
         HandleEventInfoRaw{
             fence: None,
             command_allocator: StandardCommandBufferAllocator::new(
-                info.device.clone(),
+                device.clone(),
                 Default::default()
             ),
-            queue: info.queues[0].clone(),
+            queue,
             render_info,
-            device: info.device,
+            device,
             options
         }
     );
 
-    info.event_loop.set_control_flow(ControlFlow::Poll);
+    event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app_init: Option<_> = Some(app_init);
-    info.event_loop.run(move |event, event_loop|
+    event_loop.run(move |event, event_loop|
     {
         handle_event(&mut handle_info, event, event_loop, &mut app_init);
     }).unwrap();
@@ -854,8 +835,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
 
         let command_buffer = run_frame(
             run_frame_info,
-            info.user_app.as_mut().unwrap(),
-            &info.options
+            info.user_app.as_mut().unwrap()
         );
 
         if let Some(fence) = info.fence.as_mut()
@@ -898,8 +878,7 @@ struct RunFrameInfo<'a>
 
 fn run_frame<UserApp: YanyaApp>(
     mut frame_info: RunFrameInfo,
-    user_app: &mut UserApp,
-    options: &AppOptions
+    user_app: &mut UserApp
 ) -> Arc<PrimaryAutoCommandBuffer>
 {
     let delta_time = frame_info.previous_time.elapsed().as_secs_f32();
@@ -915,21 +894,10 @@ fn run_frame<UserApp: YanyaApp>(
         user_app.update(object_create_info, delta_time);
     }
 
-    let clear_color = Some(options.clear_color);
-    let depth_clear = Some(1.0.into());
-
-    let clear_values = if let SampleCount::Sample1 = frame_info.render_info.samples
-    {
-        vec![clear_color, depth_clear]
-    } else
-    {
-        vec![clear_color, None, depth_clear]
-    };
-
     frame_info.builder
         .begin_render_pass(
             RenderPassBeginInfo{
-                clear_values,
+                clear_values: frame_info.render_info.clear_values.clone(),
                 ..RenderPassBeginInfo::framebuffer(
                     frame_info.render_info.framebuffers[frame_info.image_index].clone()
                 )

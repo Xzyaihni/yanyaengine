@@ -13,7 +13,6 @@ use vulkano::{
     VulkanLibrary,
     format::ClearValue,
     swapchain::Surface,
-    image::SampleCount,
     pipeline::{
         PipelineLayout,
         PipelineShaderStageCreateInfo,
@@ -41,7 +40,7 @@ use winit::{
 };
 
 use window::{GraphicsInfo, PipelineCreateInfo};
-pub use window::PipelineInfo;
+pub use window::{Rendering, PipelineInfo};
 
 use game_object::*;
 
@@ -138,8 +137,8 @@ pub struct AppOptions
 {
     clear_color: ClearValue,
     assets_paths: AssetsPaths,
-    samples: SampleCount,
-    shaders_query: Option<ShadersQuery>
+    shaders_query: Option<ShadersQuery>,
+    rendering: Option<Rendering>
 }
 
 impl Default for AppOptions
@@ -149,8 +148,8 @@ impl Default for AppOptions
         Self{
             clear_color: [0.0, 0.0, 0.0, 1.0].into(),
             assets_paths: AssetsPaths::default(),
-            samples: SampleCount::Sample2,
-            shaders_query: None
+            shaders_query: None,
+            rendering: None
         }
     }
 }
@@ -364,16 +363,16 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         self
     }
 
-    pub fn with_textures_path<P: Into<PathBuf>>(mut self, path: P) -> Self
+    pub fn with_rendering(mut self, rendering: Rendering) -> Self
     {
-        self.options.assets_paths.textures = Some(path.into());
+        self.options.rendering = Some(rendering);
 
         self
     }
 
-    pub fn without_multisampling(mut self) -> Self
+    pub fn with_textures_path<P: Into<PathBuf>>(mut self, path: P) -> Self
     {
-        self.options.samples = SampleCount::Sample1;
+        self.options.assets_paths.textures = Some(path.into());
 
         self
     }
@@ -433,18 +432,23 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
             PipelineCreateInfo::new(stages.into(), shader, layout)
         }).collect();
 
+        let rendering = self.options.rendering.take().unwrap_or_else(||
+        {
+            Rendering::new_default(self.options.clear_color)
+        });
+
         let graphics_info = GraphicsInfo{
             surface,
-            event_loop: self.event_loop,
             physical_device,
             device,
             pipeline_infos,
-            samples: self.options.samples,
-            queues: queues.collect()
+            queues: queues.collect(),
+            rendering
         };
 
         window::run::<UserApp>(
             graphics_info,
+            self.event_loop,
             self.options,
             self.app_init.unwrap_or_default()
         );
