@@ -16,6 +16,7 @@ use vulkano::{
     pipeline::{
         PipelineLayout,
         PipelineShaderStageCreateInfo,
+        graphics::depth_stencil::StencilState,
         layout::PipelineDescriptorSetLayoutCreateInfo
     },
     shader::{EntryPoint, ShaderModule, SpecializedShaderModule},
@@ -215,13 +216,13 @@ where
 }
 
 #[derive(Clone)]
-pub struct ShadersInfo<VT, FT=VT>
+pub struct ShadersGroup<VT, FT=VT>
 {
     vertex: VT,
     fragment: FT
 }
 
-impl<VT, FT> ShadersInfo<VT, FT>
+impl<VT, FT> ShadersGroup<VT, FT>
 {
     pub fn new_raw(vertex: VT, fragment: FT) -> Self
     {
@@ -229,7 +230,7 @@ impl<VT, FT> ShadersInfo<VT, FT>
     }
 }
 
-impl ShadersInfo<WrapperShaderFn>
+impl ShadersGroup<WrapperShaderFn>
 {
     pub fn new<A: ShaderWrappable + 'static, B: ShaderWrappable + 'static>(
         vertex: A,
@@ -242,16 +243,16 @@ impl ShadersInfo<WrapperShaderFn>
         }
     }
 
-    pub fn load(self, device: Arc<Device>) -> ShadersInfo<EntryPoint>
+    pub fn load(self, device: Arc<Device>) -> ShadersGroup<EntryPoint>
     {
-        ShadersInfo{
+        ShadersGroup{
             vertex: (self.vertex)(device.clone()),
             fragment: (self.fragment)(device),
         }
     }
 }
 
-impl ShadersInfo<EntryPoint>
+impl ShadersGroup<EntryPoint>
 {
     pub fn stages(self) -> [PipelineShaderStageCreateInfo; 2]
     {
@@ -262,15 +263,21 @@ impl ShadersInfo<EntryPoint>
     }
 }
 
+pub struct Shader
+{
+    pub shader: ShadersGroup<WrapperShaderFn>,
+    pub stencil: Option<StencilState>
+}
+
 pub struct ShadersContainer
 {
-    shaders: Vec<ShadersInfo<WrapperShaderFn>>
+    shaders: Vec<Shader>
 }
 
 impl IntoIterator for ShadersContainer
 {
-    type IntoIter = <Vec<ShadersInfo<WrapperShaderFn>> as IntoIterator>::IntoIter;
-    type Item = ShadersInfo<WrapperShaderFn>;
+    type IntoIter = <Vec<Shader> as IntoIterator>::IntoIter;
+    type Item = Shader;
 
     fn into_iter(self) -> Self::IntoIter
     {
@@ -301,7 +308,7 @@ impl ShadersContainer
         Self{shaders: Vec::new()}
     }
 
-    pub fn push(&mut self, value: ShadersInfo<WrapperShaderFn>) -> ShaderId
+    pub fn push(&mut self, value: Shader) -> ShaderId
     {
         let id = ShaderId(self.shaders.len());
 
@@ -401,10 +408,13 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
         if self.shaders.is_empty()
         {
             // load default shaders
-            let id = self.shaders.push(ShadersInfo::new(
-                default_vertex::load,
-                default_fragment::load
-            ));
+            let id = self.shaders.push(Shader{
+                shader: ShadersGroup::new(
+                    default_vertex::load,
+                    default_fragment::load
+                ),
+                stencil: None
+            });
 
             self.options.shaders_query = Some(Box::new(move |_| id));
         }
@@ -419,9 +429,9 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 
         let pipeline_infos = self.shaders.into_iter().map(|shader_item|
         {
-            let shader = shader_item.load(device.clone());
+            let shader = shader_item.shader.load(device.clone());
 
-            let stages = ShadersInfo::from(shader.clone()).stages();
+            let stages = ShadersGroup::from(shader.clone()).stages();
 
             let info = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
                 .into_pipeline_layout_create_info(device.clone())
@@ -429,7 +439,12 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 
             let layout = PipelineLayout::new(device.clone(), info).unwrap();
 
-            PipelineCreateInfo::new(stages.into(), shader, layout)
+            PipelineCreateInfo{
+                stages: stages.into(),
+                shaders: shader,
+                layout,
+                stencil: shader_item.stencil
+            }
         }).collect();
 
         let rendering = self.options.rendering.take().unwrap_or_else(||

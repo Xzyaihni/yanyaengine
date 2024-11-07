@@ -23,7 +23,7 @@ use vulkano::{
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
-            depth_stencil::{DepthStencilState, DepthState},
+            depth_stencil::{DepthStencilState, DepthState, StencilState},
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
@@ -94,7 +94,7 @@ use crate::{
     YanyaApp,
     AppOptions,
     Control,
-    ShadersInfo,
+    ShadersGroup,
     engine::Engine,
     game_object::*,
     object::{
@@ -123,21 +123,10 @@ impl From<Arc<GraphicsPipeline>> for PipelineInfo
 
 pub struct PipelineCreateInfo
 {
-    stages: Vec<PipelineShaderStageCreateInfo>,
-    shaders: ShadersInfo<EntryPoint>,
-    layout: Arc<PipelineLayout>
-}
-
-impl PipelineCreateInfo
-{
-    pub fn new(
-        stages: Vec<PipelineShaderStageCreateInfo>,
-        shaders: ShadersInfo<EntryPoint>,
-        layout: Arc<PipelineLayout>
-    ) -> Self
-    {
-        Self{stages, shaders, layout}
-    }
+    pub stages: Vec<PipelineShaderStageCreateInfo>,
+    pub shaders: ShadersGroup<EntryPoint>,
+    pub layout: Arc<PipelineLayout>,
+    pub stencil: Option<StencilState>
 }
 
 pub type AttachmentCreator = Box<dyn Fn(Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
@@ -383,6 +372,7 @@ impl RenderInfo
                 )),
                 depth_stencil_state: Some(DepthStencilState{
                     depth: Some(DepthState::simple()),
+                    stencil: shader.stencil.clone(),
                     ..Default::default()
                 }),
                 dynamic_state,
