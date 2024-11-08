@@ -11,7 +11,6 @@ use std::{
 
 use vulkano::{
     VulkanLibrary,
-    format::ClearValue,
     swapchain::Surface,
     pipeline::{
         PipelineLayout,
@@ -136,10 +135,8 @@ where
 
 pub struct AppOptions
 {
-    clear_color: ClearValue,
     assets_paths: AssetsPaths,
-    shaders_query: Option<ShadersQuery>,
-    rendering: Option<Rendering>
+    shaders_query: Option<ShadersQuery>
 }
 
 impl Default for AppOptions
@@ -147,10 +144,8 @@ impl Default for AppOptions
     fn default() -> Self
     {
         Self{
-            clear_color: [0.0, 0.0, 0.0, 1.0].into(),
             assets_paths: AssetsPaths::default(),
-            shaders_query: None,
-            rendering: None
+            shaders_query: None
         }
     }
 }
@@ -323,7 +318,7 @@ impl ShadersContainer
     }
 }
 
-pub struct AppBuilder<UserApp: YanyaApp>
+pub struct AppBuilder<UserApp: YanyaApp, T>
 {
     instance: Arc<Instance>,
     window_builder: WindowBuilder,
@@ -331,10 +326,11 @@ pub struct AppBuilder<UserApp: YanyaApp>
     shaders: ShadersContainer,
     options: AppOptions,
     app_init: Option<UserApp::AppInfo>,
+    rendering: Rendering<T>,
     _user_app: PhantomData<UserApp>
 }
 
-impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
+impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
 {
     pub fn with_title(mut self, title: &str) -> Self
     {
@@ -365,16 +361,23 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
 
     pub fn with_clear_color(mut self, color: [f32; 3]) -> Self
     {
-        self.options.clear_color = [color[0], color[1], color[2], 1.0].into();
+        self.rendering.clear[0] = Some([color[0], color[1], color[2], 1.0].into());
 
         self
     }
 
-    pub fn with_rendering(mut self, rendering: Rendering) -> Self
+    pub fn with_rendering<U>(self, rendering: Rendering<U>) -> AppBuilder<UserApp, U>
     {
-        self.options.rendering = Some(rendering);
-
-        self
+        AppBuilder{
+            instance: self.instance,
+            window_builder: self.window_builder,
+            event_loop: self.event_loop,
+            shaders: self.shaders,
+            options: self.options,
+            app_init: self.app_init,
+            rendering,
+            _user_app: PhantomData
+        }
     }
 
     pub fn with_textures_path<P: Into<PathBuf>>(mut self, path: P) -> Self
@@ -404,6 +407,8 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
     }
 
     pub fn run(mut self)
+    where
+        T: Clone
     {
         if self.shaders.is_empty()
         {
@@ -447,21 +452,16 @@ impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp>
             }
         }).collect();
 
-        let rendering = self.options.rendering.take().unwrap_or_else(||
-        {
-            Rendering::new_default(self.options.clear_color)
-        });
-
         let graphics_info = GraphicsInfo{
             surface,
             physical_device,
             device,
             pipeline_infos,
             queues: queues.collect(),
-            rendering
+            rendering: self.rendering
         };
 
-        window::run::<UserApp>(
+        window::run::<UserApp, T>(
             graphics_info,
             self.event_loop,
             self.options,
@@ -538,7 +538,7 @@ pub struct App<UserApp>
 impl<UserApp: YanyaApp + 'static> App<UserApp>
 {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> AppBuilder<UserApp>
+    pub fn new() -> AppBuilder<UserApp, ()>
     {
         let library = VulkanLibrary::new().expect("nyo vulkan? ;-;");
 
@@ -561,6 +561,7 @@ impl<UserApp: YanyaApp + 'static> App<UserApp>
             shaders: ShadersContainer::new(),
             options: AppOptions::default(),
             app_init: None,
+            rendering: Rendering::new_default([0.0, 0.0, 0.0, 1.0].into()),
             _user_app: PhantomData
         }
     }

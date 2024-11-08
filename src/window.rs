@@ -129,23 +129,24 @@ pub struct PipelineCreateInfo
     pub stencil: Option<StencilState>
 }
 
-pub type AttachmentCreator = Box<dyn Fn(Arc<PhysicalDevice>, Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
-pub type RenderPassCreator = Box<dyn FnOnce(Arc<Device>, Format) -> Arc<RenderPass>>;
+pub type AttachmentCreator<T> = Box<dyn Fn(T, Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
+pub type RenderPassCreator<T> = Box<dyn FnOnce(T, Arc<Device>, Format) -> Arc<RenderPass>>;
 
-pub struct Rendering
+pub struct Rendering<T>
 {
-    pub attachments: AttachmentCreator,
-    pub render_pass: RenderPassCreator,
+    pub setup: Box<dyn FnOnce(Arc<PhysicalDevice>) -> T>,
+    pub attachments: AttachmentCreator<T>,
+    pub render_pass: RenderPassCreator<T>,
     pub clear: Vec<Option<ClearValue>>
 }
 
-impl Rendering
+impl Rendering<()>
 {
     pub fn new_default(
         clear_color: ClearValue
     ) -> Self
     {
-        let attachments = Box::new(|_physical_device, allocator: Arc<StandardMemoryAllocator>, view: Arc<ImageView>|
+        let attachments = Box::new(|_, allocator: Arc<StandardMemoryAllocator>, view: Arc<ImageView>|
         {
             let depth_image = Image::new(
                 allocator,
@@ -164,7 +165,7 @@ impl Rendering
             vec![view, depth]
         });
 
-        let render_pass = Box::new(|device, image_format|
+        let render_pass = Box::new(|_, device, image_format|
         {
             vulkano::single_pass_renderpass!(
                 device,
@@ -192,6 +193,7 @@ impl Rendering
         let clear = vec![Some(clear_color), Some(1.0.into())];
 
         Self{
+            setup: Box::new(|_| {}),
             attachments,
             render_pass,
             clear
@@ -200,7 +202,7 @@ impl Rendering
 }
 
 // just put everything in 1 place who cares lmao
-struct RenderInfo
+struct RenderInfo<T>
 {
     pub device: Arc<Device>,
     pub swapchain: Arc<Swapchain>,
@@ -214,14 +216,14 @@ struct RenderInfo
     pipeline_infos: Vec<PipelineCreateInfo>,
     pub memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
-    physical_device: Arc<PhysicalDevice>,
-    attachment_creator: AttachmentCreator
+    setup: T,
+    attachment_creator: AttachmentCreator<T>
 }
 
-impl RenderInfo
+impl<T: Clone> RenderInfo<T>
 {
     pub fn new(
-        info: GraphicsInfo,
+        info: GraphicsInfo<T>,
         capabilities: SurfaceCapabilities,
         image_format: Format,
         composite_alpha: CompositeAlpha
@@ -260,7 +262,8 @@ impl RenderInfo
             }
         ).unwrap();
 
-        let render_pass = (info.rendering.render_pass)(device.clone(), image_format);
+        let setup = (info.rendering.setup)(info.physical_device.clone());
+        let render_pass = (info.rendering.render_pass)(setup.clone(), device.clone(), image_format);
 
         let attachment_creator = info.rendering.attachments;
 
@@ -268,7 +271,7 @@ impl RenderInfo
             memory_allocator.clone(),
             images.into_iter(),
             render_pass.clone(),
-            &info.physical_device,
+            &setup,
             &attachment_creator
         );
 
@@ -304,7 +307,7 @@ impl RenderInfo
             pipeline_infos,
             memory_allocator,
             descriptor_allocator,
-            physical_device: info.physical_device.clone(),
+            setup,
             attachment_creator
         }
     }
@@ -313,15 +316,15 @@ impl RenderInfo
         memory_allocator: Arc<StandardMemoryAllocator>,
         images: impl Iterator<Item=Arc<Image>>,
         render_pass: Arc<RenderPass>,
-        physical_device: &Arc<PhysicalDevice>,
-        attachments: &AttachmentCreator
+        setup: &T,
+        attachments: &AttachmentCreator<T>
     ) -> Box<[Arc<Framebuffer>]>
     {
         images.map(|image|
         {
             let view = ImageView::new_default(image).unwrap();
 
-            let attachments = attachments(physical_device.clone(), memory_allocator.clone(), view);
+            let attachments = attachments(setup.clone(), memory_allocator.clone(), view);
 
             Framebuffer::new(
                 render_pass.clone(),
@@ -439,7 +442,7 @@ impl RenderInfo
             self.memory_allocator.clone(),
             new_images.into_iter(),
             self.render_pass.clone(),
-            &self.physical_device,
+            &self.setup,
             &self.attachment_creator
         );
 
@@ -483,34 +486,34 @@ impl RenderInfo
     }
 }
 
-pub struct GraphicsInfo
+pub struct GraphicsInfo<T>
 {
     pub surface: Arc<Surface>,
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub pipeline_infos: Vec<PipelineCreateInfo>,
     pub queues: Vec<Arc<Queue>>,
-    pub rendering: Rendering
+    pub rendering: Rendering<T>
 }
 
 // stupid code duplication but im lazy wutever
-struct HandleEventInfoRaw
+struct HandleEventInfoRaw<T>
 {
     command_allocator: StandardCommandBufferAllocator,
     queue: Arc<Queue>,
     fence: FutureType,
     device: Arc<Device>,
-    render_info: RenderInfo,
+    render_info: RenderInfo<T>,
     options: AppOptions
 }
 
-struct HandleEventInfo<UserApp>
+struct HandleEventInfo<UserApp, T>
 {
     command_allocator: StandardCommandBufferAllocator,
     queue: Arc<Queue>,
     fence: FutureType,
     device: Arc<Device>,
-    render_info: RenderInfo,
+    render_info: RenderInfo<T>,
     options: AppOptions,
     engine: Option<Engine>,
     user_app: Option<UserApp>,
@@ -520,9 +523,9 @@ struct HandleEventInfo<UserApp>
     window_resized: bool
 }
 
-impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
+impl<UserApp, T> From<HandleEventInfoRaw<T>> for HandleEventInfo<UserApp, T>
 {
-    fn from(value: HandleEventInfoRaw) -> Self
+    fn from(value: HandleEventInfoRaw<T>) -> Self
     {
         Self{
             command_allocator: value.command_allocator,
@@ -541,8 +544,8 @@ impl<UserApp> From<HandleEventInfoRaw> for HandleEventInfo<UserApp>
     }
 }
 
-pub fn run<UserApp: YanyaApp + 'static>(
-    info: GraphicsInfo,
+pub fn run<UserApp: YanyaApp + 'static, T: Clone>(
+    info: GraphicsInfo<T>,
     event_loop: EventLoop<()>,
     options: AppOptions,
     app_init: UserApp::AppInfo
@@ -588,7 +591,7 @@ pub fn run<UserApp: YanyaApp + 'static>(
         composite_alpha
     );
 
-    let mut handle_info: HandleEventInfo<UserApp> = HandleEventInfo::from(
+    let mut handle_info: HandleEventInfo<UserApp, T> = HandleEventInfo::from(
         HandleEventInfoRaw{
             fence: None,
             command_allocator: StandardCommandBufferAllocator::new(
@@ -611,8 +614,8 @@ pub fn run<UserApp: YanyaApp + 'static>(
     }).unwrap();
 }
 
-fn handle_event<UserApp: YanyaApp + 'static>(
-    info: &mut HandleEventInfo<UserApp>,
+fn handle_event<UserApp: YanyaApp + 'static, T: Clone>(
+    info: &mut HandleEventInfo<UserApp, T>,
     event: Event<()>,
     event_loop: &EventLoopWindowTarget<()>,
     app_init: &mut Option<UserApp::AppInfo>
@@ -727,8 +730,8 @@ fn handle_event<UserApp: YanyaApp + 'static>(
     }
 }
 
-fn handle_redraw<UserApp: YanyaApp + 'static>(
-    info: &mut HandleEventInfo<UserApp>,
+fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
+    info: &mut HandleEventInfo<UserApp, T>,
     app_init: &mut Option<UserApp::AppInfo>
 )
 {
@@ -862,17 +865,17 @@ struct FrameData
     image_index: u32
 }
 
-struct RunFrameInfo<'a>
+struct RunFrameInfo<'a, T>
 {
     engine: &'a mut Engine,
     image_index: usize,
     builder: CommandBuilderType,
-    render_info: &'a mut RenderInfo,
+    render_info: &'a mut RenderInfo<T>,
     previous_time: &'a mut Instant
 }
 
-fn run_frame<UserApp: YanyaApp>(
-    mut frame_info: RunFrameInfo,
+fn run_frame<UserApp: YanyaApp, T: Clone>(
+    mut frame_info: RunFrameInfo<T>,
     user_app: &mut UserApp
 ) -> Arc<PrimaryAutoCommandBuffer>
 {
