@@ -23,7 +23,7 @@ use vulkano::{
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
-            depth_stencil::{DepthStencilState, StencilState},
+            depth_stencil::{DepthStencilState, DepthState, StencilState},
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
@@ -126,6 +126,7 @@ pub struct PipelineCreateInfo
     pub stages: Vec<PipelineShaderStageCreateInfo>,
     pub shaders: ShadersGroup<EntryPoint>,
     pub layout: Arc<PipelineLayout>,
+    pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>
 }
 
@@ -376,6 +377,7 @@ impl<T: Clone> RenderInfo<T>
                     }
                 )),
                 depth_stencil_state: Some(DepthStencilState{
+                    depth: shader.depth.clone(),
                     stencil: shader.stencil.clone(),
                     ..Default::default()
                 }),

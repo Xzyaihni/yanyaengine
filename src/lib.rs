@@ -15,7 +15,7 @@ use vulkano::{
     pipeline::{
         PipelineLayout,
         PipelineShaderStageCreateInfo,
-        graphics::depth_stencil::StencilState,
+        graphics::depth_stencil::{DepthState, StencilState},
         layout::PipelineDescriptorSetLayoutCreateInfo
     },
     shader::{EntryPoint, ShaderModule, SpecializedShaderModule},
@@ -261,7 +261,23 @@ impl ShadersGroup<EntryPoint>
 pub struct Shader
 {
     pub shader: ShadersGroup<WrapperShaderFn>,
+    pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>
+}
+
+impl Default for Shader
+{
+    fn default() -> Self
+    {
+        Self{
+            shader: ShadersGroup::new(
+                default_vertex::load,
+                default_fragment::load
+            ),
+            depth: None,
+            stencil: None
+        }
+    }
 }
 
 pub struct ShadersContainer
@@ -413,13 +429,7 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
         if self.shaders.is_empty()
         {
             // load default shaders
-            let id = self.shaders.push(Shader{
-                shader: ShadersGroup::new(
-                    default_vertex::load,
-                    default_fragment::load
-                ),
-                stencil: None
-            });
+            let id = self.shaders.push(Shader::default());
 
             self.options.shaders_query = Some(Box::new(move |_| id));
         }
@@ -448,6 +458,7 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
                 stages: stages.into(),
                 shaders: shader,
                 layout,
+                depth: shader_item.depth,
                 stencil: shader_item.stencil
             }
         }).collect();
