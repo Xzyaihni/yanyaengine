@@ -129,7 +129,7 @@ pub struct PipelineCreateInfo
     pub stencil: Option<StencilState>
 }
 
-pub type AttachmentCreator = Box<dyn Fn(Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
+pub type AttachmentCreator = Box<dyn Fn(Arc<PhysicalDevice>, Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
 pub type RenderPassCreator = Box<dyn FnOnce(Arc<Device>, Format) -> Arc<RenderPass>>;
 
 pub struct Rendering
@@ -145,7 +145,7 @@ impl Rendering
         clear_color: ClearValue
     ) -> Self
     {
-        let attachments = Box::new(|allocator: Arc<StandardMemoryAllocator>, view: Arc<ImageView>|
+        let attachments = Box::new(|_physical_device, allocator: Arc<StandardMemoryAllocator>, view: Arc<ImageView>|
         {
             let depth_image = Image::new(
                 allocator,
@@ -214,6 +214,7 @@ struct RenderInfo
     pipeline_infos: Vec<PipelineCreateInfo>,
     pub memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
+    physical_device: Arc<PhysicalDevice>,
     attachment_creator: AttachmentCreator
 }
 
@@ -267,6 +268,7 @@ impl RenderInfo
             memory_allocator.clone(),
             images.into_iter(),
             render_pass.clone(),
+            &info.physical_device,
             &attachment_creator
         );
 
@@ -302,6 +304,7 @@ impl RenderInfo
             pipeline_infos,
             memory_allocator,
             descriptor_allocator,
+            physical_device: info.physical_device.clone(),
             attachment_creator
         }
     }
@@ -310,6 +313,7 @@ impl RenderInfo
         memory_allocator: Arc<StandardMemoryAllocator>,
         images: impl Iterator<Item=Arc<Image>>,
         render_pass: Arc<RenderPass>,
+        physical_device: &Arc<PhysicalDevice>,
         attachments: &AttachmentCreator
     ) -> Box<[Arc<Framebuffer>]>
     {
@@ -317,7 +321,7 @@ impl RenderInfo
         {
             let view = ImageView::new_default(image).unwrap();
 
-            let attachments = attachments(memory_allocator.clone(), view);
+            let attachments = attachments(physical_device.clone(), memory_allocator.clone(), view);
 
             Framebuffer::new(
                 render_pass.clone(),
@@ -435,6 +439,7 @@ impl RenderInfo
             self.memory_allocator.clone(),
             new_images.into_iter(),
             self.render_pass.clone(),
+            &self.physical_device,
             &self.attachment_creator
         );
 
