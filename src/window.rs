@@ -23,7 +23,7 @@ use vulkano::{
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
-            depth_stencil::{DepthStencilState, DepthState, StencilState},
+            depth_stencil::{DepthStencilState, StencilState},
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
@@ -345,8 +345,6 @@ impl<T: Clone> RenderInfo<T>
     {
         let mut dynamic_state = ahash::HashSet::default();
         dynamic_state.insert(DynamicState::Scissor);
-        dynamic_state.insert(DynamicState::DepthTestEnable);
-        dynamic_state.insert(DynamicState::DepthWriteEnable);
 
         let pipeline = GraphicsPipeline::new(
             device,
@@ -378,7 +376,6 @@ impl<T: Clone> RenderInfo<T>
                     }
                 )),
                 depth_stencil_state: Some(DepthStencilState{
-                    depth: Some(DepthState::simple()),
                     stencil: shader.stencil.clone(),
                     ..Default::default()
                 }),
@@ -769,8 +766,6 @@ fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
     }
 
     builder.set_scissor(0, vec![Scissor::default()].into()).unwrap();
-    builder.set_depth_test_enable(true).unwrap();
-    builder.set_depth_write_enable(true).unwrap();
 
     let acquired =
         match swapchain::acquire_next_image(info.render_info.swapchain.clone(), None)
