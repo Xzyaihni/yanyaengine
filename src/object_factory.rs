@@ -13,7 +13,10 @@ use super::{
 	}
 };
 
-use crate::transform::Transform;
+use crate::{
+    SolidObject,
+    transform::Transform
+};
 
 
 pub struct ObjectInfo
@@ -47,6 +50,15 @@ impl ObjectFactory
 			&self.allocator
 		)
 	}
+
+    pub fn create_solid(&self, model: Arc<RwLock<Model>>, transform: Transform) -> SolidObject
+    {
+        SolidObject::new(
+            model,
+            ObjectTransform::new_transformed(transform),
+            &self.allocator
+        )
+    }
 
     pub fn create_occluding(&self, transform: Transform) -> OccludingPlane
     {

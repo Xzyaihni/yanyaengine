@@ -1,13 +1,18 @@
-use std::fmt;
+#[allow(unused_imports)]
+use std::{fmt, cell::RefCell};
 
-use vulkano::buffer::Subbuffer;
+use vulkano::{
+    buffer::Subbuffer,
+    pipeline::graphics::vertex_input::{VertexBufferDescription, Vertex}
+};
 
 use nalgebra::{Vector3, Vector4, Matrix4};
 
 use crate::{
     WINDING_MATTERS,
     game_object::*,
-    object::{Model, ObjectVertex, ObjectTransform},
+    SimpleVertex,
+    object::{impl_updated_check, Model, ObjectTransform},
     allocators::ObjectAllocator,
     transform::{Transform, OnTransformCallback, TransformContainer}
 };
@@ -16,7 +21,9 @@ use crate::{
 pub struct OccludingPlane
 {
     transform: ObjectTransform,
-    subbuffer: Subbuffer<[ObjectVertex]>
+    subbuffer: Subbuffer<[SimpleVertex]>,
+    #[cfg(debug_assertions)]
+    updated_buffers: bool
 }
 
 #[allow(dead_code)]
@@ -36,11 +43,13 @@ impl OccludingPlane
         allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffer = allocator.subbuffer(&Model::square(1.0));
+        let subbuffer = allocator.subbuffer(Model::square(1.0).vertices.len() as u64);
 
         Self{
             transform,
-            subbuffer
+            subbuffer,
+            #[cfg(debug_assertions)]
+            updated_buffers: false
         }
     }
 
@@ -48,7 +57,7 @@ impl OccludingPlane
         &self,
         origin: Vector3<f32>,
         projection_view: Matrix4<f32>
-    ) -> Box<[ObjectVertex]>
+    ) -> Box<[SimpleVertex]>
     {
         let transform = self.transform.matrix();
 
@@ -116,11 +125,9 @@ impl OccludingPlane
             ]
         };
 
-        let uvs = Model::square(1.0).uvs;
-
-        vertices.iter().zip(uvs.iter()).map(move |(&vertex, uv)|
+        vertices.iter().map(move |&vertex|
         {
-            ObjectVertex{position: vertex.into(), uv: *uv}
+            SimpleVertex{position: vertex.into()}
         }).collect::<Box<[_]>>()
     }
 
@@ -130,6 +137,8 @@ impl OccludingPlane
         info: &mut UpdateBuffersInfo
     )
     {
+        self.set_updated(&info.partial);
+
         info.partial.builder_wrapper.builder()
             .update_buffer(
                 self.subbuffer.clone(),
@@ -139,6 +148,8 @@ impl OccludingPlane
 
     pub fn draw(&self, info: &mut DrawInfo)
     {
+        self.assert_updated(&info.object_info);
+
         let square_vertices = Model::square(1.0).vertices.len() as u32;
 
         info.object_info.builder_wrapper.builder()
@@ -146,6 +157,13 @@ impl OccludingPlane
             .unwrap()
             .draw(square_vertices, 1, 0, 0)
             .unwrap();
+    }
+
+    impl_updated_check!{}
+
+    pub fn per_vertex() -> VertexBufferDescription
+    {
+        SimpleVertex::per_vertex()
     }
 }
 

@@ -40,7 +40,9 @@ pub struct ObjectCreatePartialInfo<'a>
     pub assets: Arc<Mutex<Assets>>,
     pub object_factory: Rc<ObjectFactory>,
     pub uniform_allocator: Rc<UniformAllocator>,
-    pub size: [f32; 2]
+    pub size: [f32; 2],
+    #[cfg(debug_assertions)]
+    pub frame_parity: bool
 }
 
 impl<'a> ObjectCreatePartialInfo<'a>

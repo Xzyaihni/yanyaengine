@@ -1,5 +1,7 @@
+#[allow(unused_imports)]
 use std::{
     fmt,
+    cell::RefCell,
     sync::Arc
 };
 
@@ -9,7 +11,7 @@ use vulkano::{
     buffer::{BufferContents, Subbuffer},
     pipeline::{
         PipelineBindPoint,
-        graphics::vertex_input::Vertex
+        graphics::vertex_input::{VertexBufferDescription, Vertex}
     }
 };
 
@@ -19,6 +21,8 @@ use crate::{
     allocators::ObjectAllocator,
     transform::{Transform, OnTransformCallback, TransformContainer}
 };
+
+pub use crate::impl_updated_check;
 
 pub use object_transform::ObjectTransform;
 
@@ -34,9 +38,78 @@ pub mod model;
 pub mod texture;
 
 
+pub trait NormalGraphicalObject<T: BufferContents>
+{
+    fn subbuffer(&self) -> Subbuffer<[T]>;
+    fn vertices(&self, projection_view: Matrix4<f32>) -> Box<[T]>;
+
+    fn set_updated(&mut self, object_info: &ObjectCreatePartialInfo);
+    fn assert_updated(&self, object_info: &ObjectCreatePartialInfo);
+
+    fn normal_update_buffers(&mut self, info: &mut UpdateBuffersInfo)
+    {
+        let vertices = self.vertices(info.projection_view);
+        if vertices.is_empty()
+        {
+            return;
+        }
+
+        self.set_updated(&info.partial);
+
+        info.partial.builder_wrapper.builder()
+            .update_buffer(
+                self.subbuffer(),
+                vertices
+            ).unwrap();
+    }
+}
+
+#[macro_export]
+macro_rules! impl_updated_check
+{
+    () =>
+    {
+        #[allow(unused_variables)]
+        fn set_updated(&mut self, object_info: &crate::object::game_object::ObjectCreatePartialInfo)
+        {
+            #[cfg(debug_assertions)]
+            {
+                self.updated_buffers = object_info.frame_parity;
+            }
+        }
+
+        #[allow(unused_variables)]
+        fn assert_updated(&self, object_info: &crate::object::game_object::ObjectCreatePartialInfo)
+        {
+            #[cfg(debug_assertions)]
+            {
+                assert!(
+                    self.updated_buffers == object_info.frame_parity,
+                    "update_buffers wasnt called on {self:#?}"
+                );
+            }
+        }
+    }
+}
+
+impl NormalGraphicalObject<ObjectVertex> for Object
+{
+    fn subbuffer(&self) -> Subbuffer<[ObjectVertex]>
+    {
+        self.subbuffer.clone()
+    }
+
+    fn vertices(&self, projection_view: Matrix4<f32>) -> Box<[ObjectVertex]>
+    {
+        self.calculate_vertices(projection_view)
+    }
+
+    impl_updated_check!{}
+}
+
 #[derive(BufferContents, Vertex, Clone, Copy)]
 #[repr(C)]
-pub struct ObjectVertex
+struct ObjectVertex
 {
     #[format(R32G32B32A32_SFLOAT)]
     pub position: [f32; 4],
@@ -50,7 +123,9 @@ pub struct Object
     model: Arc<RwLock<Model>>,
     texture: Arc<RwLock<Texture>>,
     transform: ObjectTransform,
-    subbuffer: Subbuffer<[ObjectVertex]>
+    subbuffer: Subbuffer<[ObjectVertex]>,
+    #[cfg(debug_assertions)]
+    updated_buffers: bool
 }
 
 #[allow(dead_code)]
@@ -74,16 +149,17 @@ impl Object
         allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffer = allocator.subbuffer(&model.read());
+        let subbuffer = allocator.subbuffer(model.read().vertices.len() as u64);
 
         Self{
             model,
             texture,
             transform,
-            subbuffer
+            subbuffer,
+            #[cfg(debug_assertions)]
+            updated_buffers: false
         }
     }
-
 
     fn calculate_vertices(&self, projection_view: Matrix4<f32>) -> Box<[ObjectVertex]>
     {
@@ -106,9 +182,12 @@ impl Object
         self.transform.set_origin(origin);
     }
 
-    pub fn set_inplace_model(&mut self, model: Model)
+    pub fn set_inplace_model_same_sized(&mut self, model: Model)
     {
-        *self.model.write() = model;
+        let mut current_model = self.model.write();
+        assert_eq!(current_model.vertices.len(), model.vertices.len());
+
+        *current_model = model;
     }
 
     pub fn set_texture(&mut self, texture: Arc<RwLock<Texture>>)
@@ -130,22 +209,18 @@ impl Object
     {
         !self.model.read().vertices.is_empty()
     }
+
+    pub fn per_vertex() -> VertexBufferDescription
+    {
+        ObjectVertex::per_vertex()
+    }
 }
 
 impl GameObject for Object
 {
     fn update_buffers(&mut self, info: &mut UpdateBuffersInfo)
     {
-        if !self.needs_draw()
-        {
-            return;
-        }
-
-        info.partial.builder_wrapper.builder()
-            .update_buffer(
-                self.subbuffer.clone(),
-                self.calculate_vertices(info.projection_view)
-            ).unwrap();
+        self.normal_update_buffers(info);
     }
 
     fn draw(&self, info: &mut DrawInfo)
@@ -154,6 +229,8 @@ impl GameObject for Object
         {
             return;
         }
+
+        self.assert_updated(&info.object_info);
 
         let size = self.model.read().vertices.len() as u32;
 

@@ -14,11 +14,6 @@ use vulkano::{
     }
 };
 
-use crate::object::{
-    ObjectVertex,
-    Model
-};
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct UniformLocation
@@ -52,9 +47,9 @@ impl ObjectAllocator
 		Self{allocator}
 	}
 
-	pub fn subbuffer(&self, model: &Model) -> Subbuffer<[ObjectVertex]>
+	pub fn subbuffer<T: BufferContents>(&self, size: u64) -> Subbuffer<[T]>
 	{
-		self.allocator.allocate_slice(model.vertices.len() as u64).unwrap()
+		self.allocator.allocate_slice(size).unwrap()
 	}
 }
 

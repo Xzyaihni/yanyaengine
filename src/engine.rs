@@ -62,10 +62,12 @@ impl Engine
         Self{fonts_info, object_factory, uniform_allocator, assets}
     }
 
+    #[allow(unused_variables)]
     pub fn object_create_partial_info<'a>(
         &'a mut self,
         resource_uploader: ResourceUploader<'a>,
-        size: [f32; 2]
+        size: [f32; 2],
+        frame_parity: bool
     ) -> ObjectCreatePartialInfo<'a>
     {
         let builder_wrapper = BuilderWrapper::new(
@@ -79,7 +81,9 @@ impl Engine
             assets: self.assets.clone(),
             object_factory: self.object_factory.clone(),
             uniform_allocator: self.uniform_allocator.clone(),
-            size
+            size,
+            #[cfg(debug_assertions)]
+            frame_parity
         }
     }
 
@@ -89,7 +93,7 @@ impl Engine
         size: [f32; 2]
     ) -> InitPartialInfo<'a>
     {
-        self.object_create_partial_info(resource_uploader, size)
+        self.object_create_partial_info(resource_uploader, size, false)
     }
 
     pub fn swap_pipelines(&mut self, resource_uploader: &ResourceUploader)

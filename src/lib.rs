@@ -11,11 +11,15 @@ use std::{
 
 use vulkano::{
     VulkanLibrary,
+    buffer::subbuffer::BufferContents,
     swapchain::Surface,
     pipeline::{
         PipelineLayout,
         PipelineShaderStageCreateInfo,
-        graphics::depth_stencil::{DepthState, StencilState},
+        graphics::{
+            vertex_input::{VertexBufferDescription, Vertex},
+            depth_stencil::{DepthState, StencilState}
+        },
         layout::PipelineDescriptorSetLayoutCreateInfo
     },
     shader::{EntryPoint, ShaderModule, SpecializedShaderModule},
@@ -50,6 +54,8 @@ pub use object::{
     resource_uploader::ResourceUploader
 };
 
+pub use solid_object::SolidObject;
+
 pub use occluding_plane::OccludingPlane;
 
 pub use text_object::{TextAlign, VerticalAlign, HorizontalAlign, TextObject};
@@ -80,6 +86,7 @@ pub mod allocators;
 
 pub mod occluding_plane;
 pub mod object;
+pub mod solid_object;
 pub mod camera;
 pub mod transform;
 
@@ -110,6 +117,14 @@ mod default_fragment
         ty: "fragment",
         path: "shaders/default.frag"
     }
+}
+
+#[derive(BufferContents, Vertex, Debug, Clone, Copy)]
+#[repr(C)]
+struct SimpleVertex
+{
+    #[format(R32G32B32A32_SFLOAT)]
+    pub position: [f32; 4]
 }
 
 pub trait YanyaApp
@@ -261,6 +276,7 @@ impl ShadersGroup<EntryPoint>
 pub struct Shader
 {
     pub shader: ShadersGroup<WrapperShaderFn>,
+    pub per_vertex: Option<VertexBufferDescription>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>
 }
@@ -274,6 +290,7 @@ impl Default for Shader
                 default_vertex::load,
                 default_fragment::load
             ),
+            per_vertex: None,
             depth: None,
             stencil: None
         }
@@ -442,7 +459,7 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
         let (physical_device, (device, queues)) =
             Self::create_device(surface.clone(), self.instance);
 
-        let pipeline_infos = self.shaders.into_iter().map(|shader_item|
+        let pipeline_infos = self.shaders.into_iter().enumerate().map(|(index, shader_item)|
         {
             let shader = shader_item.shader.load(device.clone());
 
@@ -454,9 +471,15 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
 
             let layout = PipelineLayout::new(device.clone(), info).unwrap();
 
+            let per_vertex = shader_item.per_vertex.unwrap_or_else(||
+            {
+                panic!("per_vertex must be provided for shader #{index}")
+            });
+
             PipelineCreateInfo{
                 stages: stages.into(),
                 shaders: shader,
+                per_vertex,
                 layout,
                 depth: shader_item.depth,
                 stencil: shader_item.stencil

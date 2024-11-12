@@ -27,7 +27,7 @@ use vulkano::{
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
-            vertex_input::{VertexDefinition, Vertex},
+            vertex_input::{VertexBufferDescription, VertexDefinition},
             viewport::{Scissor, Viewport, ViewportState}
         }
     },
@@ -97,10 +97,7 @@ use crate::{
     ShadersGroup,
     engine::Engine,
     game_object::*,
-    object::{
-        ObjectVertex,
-        resource_uploader::ResourceUploader
-    }
+    object::resource_uploader::ResourceUploader
 };
 
 
@@ -124,6 +121,7 @@ impl From<Arc<GraphicsPipeline>> for PipelineInfo
 pub struct PipelineCreateInfo
 {
     pub stages: Vec<PipelineShaderStageCreateInfo>,
+    pub per_vertex: VertexBufferDescription,
     pub shaders: ShadersGroup<EntryPoint>,
     pub layout: Arc<PipelineLayout>,
     pub depth: Option<DepthState>,
@@ -352,7 +350,7 @@ impl<T: Clone> RenderInfo<T>
             None,
             GraphicsPipelineCreateInfo{
                 stages: shader.stages.iter().cloned().collect(),
-                vertex_input_state: Some(ObjectVertex::per_vertex()
+                vertex_input_state: Some(shader.per_vertex
                     .definition(&shader.shaders.vertex.info().input_interface)
                     .unwrap()
                 ),
@@ -517,6 +515,7 @@ struct HandleEventInfo<UserApp, T>
     engine: Option<Engine>,
     user_app: Option<UserApp>,
     previous_time: Instant,
+    frame_parity: bool,
     initialized: bool,
     recreate_swapchain: bool,
     window_resized: bool
@@ -536,6 +535,7 @@ impl<UserApp, T> From<HandleEventInfoRaw<T>> for HandleEventInfo<UserApp, T>
             engine: None,
             user_app: None,
             previous_time: Instant::now(),
+            frame_parity: false,
             initialized: false,
             recreate_swapchain: false,
             window_resized: false
@@ -825,8 +825,11 @@ fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
             builder,
             image_index: image_index as usize,
             render_info: &mut info.render_info,
-            previous_time: &mut info.previous_time
+            previous_time: &mut info.previous_time,
+            frame_parity: info.frame_parity
         };
+
+        info.frame_parity = !info.frame_parity;
 
         let command_buffer = run_frame(
             run_frame_info,
@@ -868,7 +871,8 @@ struct RunFrameInfo<'a, T>
     image_index: usize,
     builder: CommandBuilderType,
     render_info: &'a mut RenderInfo<T>,
-    previous_time: &'a mut Instant
+    previous_time: &'a mut Instant,
+    frame_parity: bool
 }
 
 fn run_frame<UserApp: YanyaApp, T: Clone>(
@@ -883,7 +887,8 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
         let object_create_info = frame_info.engine
             .object_create_partial_info(
                 frame_info.render_info.resource_uploader(&mut frame_info.builder),
-                frame_info.render_info.size()
+                frame_info.render_info.size(),
+                frame_info.frame_parity
             );
 
         user_app.update(object_create_info, delta_time);
@@ -908,7 +913,8 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
         let object_create_info = frame_info.engine
             .object_create_partial_info(
                 frame_info.render_info.resource_uploader(&mut frame_info.builder),
-                frame_info.render_info.size()
+                frame_info.render_info.size(),
+                frame_info.frame_parity
             );
 
         let draw_info = DrawInfo::new(

@@ -342,7 +342,7 @@ impl TextObject
                 0.0
             ));
 
-            object.set_inplace_model(model);
+            object.set_inplace_model_same_sized(model);
         }
     }
 
