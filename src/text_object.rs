@@ -93,7 +93,7 @@ pub struct GlyphInfo
     pub height: u32
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HorizontalAlign
 {
     Left,
@@ -114,7 +114,7 @@ impl HorizontalAlign
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VerticalAlign
 {
     Top,
@@ -135,7 +135,7 @@ impl VerticalAlign
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextAlign
 {
     pub horizontal: HorizontalAlign,
