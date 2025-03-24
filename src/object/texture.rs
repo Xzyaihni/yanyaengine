@@ -371,16 +371,20 @@ impl Texture
         self.view.image()
     }
 
-    pub fn aspect_min(&self) -> Vector2<f32>
+    pub fn size(&self) -> Vector2<f32>
     {
         let [x, y, _z] = self.view.image().extent();
 
-        let x = x as f32;
-        let y = y as f32;
+        Vector2::new(x as f32, y as f32)
+    }
 
-        let max_size = x.max(y);
+    pub fn aspect_min(&self) -> Vector2<f32>
+    {
+        let size = self.size();
 
-        Vector2::new(x, y) / max_size
+        let max_size = size.max();
+
+        size / max_size
     }
 
     pub fn swap_pipeline(&mut self, resource_uploader: &ResourceUploader)
