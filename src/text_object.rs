@@ -167,7 +167,6 @@ impl TextAlign
 pub struct TextCreateInfo<'a>
 {
     pub transform: Transform,
-    pub dynamic_scale: Option<Vector2<f32>>,
     pub inner: TextInfo<'a>
 }
 
@@ -175,8 +174,7 @@ pub struct TextCreateInfo<'a>
 pub struct TextObject
 {
     pub object: Option<Object>,
-    align: TextAlign,
-    dynamic_scale: Option<Vector2<f32>>,
+    align: Option<TextAlign>,
     size: Vector2<f32>
 }
 
@@ -205,7 +203,6 @@ impl TextObject
             return Self{
                 object: None,
                 align,
-                dynamic_scale: info.dynamic_scale,
                 size: global_size
             };
         }
@@ -236,7 +233,6 @@ impl TextObject
         let mut this = Self{
             object: Some(object),
             align,
-            dynamic_scale: info.dynamic_scale,
             size: global_size
         };
 
@@ -307,16 +303,12 @@ impl TextObject
         self.size
     }
 
-    pub fn set_dynamic_scale(&mut self, dynamic_scale: Option<Vector2<f32>>)
-    {
-        self.dynamic_scale = dynamic_scale;
-        self.update_scale();
-    }
-
     pub fn update_scale(&mut self)
     {
         if let Some(object) = self.object.as_mut()
         {
+            let align = if let Some(x) = self.align.as_ref() { x } else { return; };
+
             let scale = object.scale();
 
             let model_size = if scale.x.classify() == FpCategory::Zero || scale.y.classify() == FpCategory::Zero
@@ -324,21 +316,15 @@ impl TextObject
                 Vector2::zeros()
             } else
             {
-                if let Some(starting) = self.dynamic_scale
-                {
-                    self.size.component_div(&starting)
-                } else
-                {
-                    self.size.component_div(&scale.xy())
-                }
+                self.size.component_div(&scale.xy())
             };
 
             let shift = (Vector2::repeat(1.0) - model_size.xy()) / 2.0;
 
             let mut model = Model::rectangle(model_size.x, model_size.y);
             model.shift(Vector3::new(
-                shift.x * self.align.horizontal.sign(),
-                shift.y * self.align.vertical.sign(),
+                shift.x * align.horizontal.sign(),
+                shift.y * align.vertical.sign(),
                 0.0
             ));
 

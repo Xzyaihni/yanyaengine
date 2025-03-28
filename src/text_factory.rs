@@ -94,7 +94,7 @@ pub struct TextInfo<'a>
 {
     pub font_size: u32,
     pub font: FontStyle,
-    pub align: TextAlign,
+    pub align: Option<TextAlign>,
     pub text: &'a str
 }
 
