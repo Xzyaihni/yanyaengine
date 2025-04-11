@@ -1,3 +1,5 @@
+use std::fmt;
+
 use nalgebra::{
     Vector3,
     base::Matrix4
@@ -6,12 +8,23 @@ use nalgebra::{
 use crate::transform::{Transform, OnTransformCallback, TransformContainer};
 
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ObjectTransform
 {
     transform: Transform,
     origin: Vector3<f32>,
     matrix: Matrix4<f32>
+}
+
+impl fmt::Debug for ObjectTransform
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        f.debug_struct("ObjectTransform")
+            .field("transform", &self.transform)
+            .field("origin", &self.origin)
+            .finish()
+    }
 }
 
 #[allow(dead_code)]
