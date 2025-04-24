@@ -69,9 +69,9 @@ impl FontsContainer
         Self{font_textures}
     }
 
-    pub fn calculate_bounds(&self, info: TextInfo) -> Vector2<f32>
+    pub fn calculate_bounds(&self, info: TextInfo, size: &Vector2<f32>) -> Vector2<f32>
     {
-        TextObject::calculate_bounds(info, self)
+        TextObject::calculate_bounds(info, self, size)
     }
 
     pub fn len(&self) -> usize
@@ -102,6 +102,7 @@ pub struct TextFactory<'a, 'b: 'a>
 {
     resource_uploader: &'a mut ResourceUploader<'b>,
     object_factory: Rc<ObjectFactory>,
+    size: Vector2<f32>,
     fonts_container: &'a FontsContainer
 }
 
@@ -110,10 +111,11 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
     pub fn new(
         resource_uploader: &'a mut ResourceUploader<'b>,
         object_factory: Rc<ObjectFactory>,
+        size: Vector2<f32>,
         fonts_container: &'a FontsContainer
     ) -> Self
     {
-        Self{resource_uploader, object_factory, fonts_container}
+        Self{resource_uploader, object_factory, size, fonts_container}
     }
 
     pub fn create(
@@ -126,6 +128,7 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
         TextObject::new(
             self.resource_uploader,
             &self.object_factory,
+            &self.size,
             info,
             self.fonts_container,
             location,

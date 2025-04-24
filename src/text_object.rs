@@ -183,6 +183,7 @@ impl TextObject
     pub fn new(
         resource_uploader: &mut ResourceUploader,
         object_factory: &ObjectFactory,
+        screen_size: &Vector2<f32>,
         info: TextCreateInfo,
         fonts: &FontsContainer,
         location: UniformLocation,
@@ -196,7 +197,7 @@ impl TextObject
 
         let (chars_info, size, height_single) = Self::calculate_bounds_pixels(info.inner, fonts);
 
-        let global_size = Self::bounds_to_global(size);
+        let global_size = Self::bounds_to_global(screen_size, size);
 
         if size.x == 0 || size.y == 0
         {
@@ -281,21 +282,20 @@ impl TextObject
         (chars_info, Vector2::new(width, height), height_single)
     }
 
-    pub fn bounds_to_global(bounds: Vector2<i32>) -> Vector2<f32>
+    fn bounds_to_global(size: &Vector2<f32>, bounds: Vector2<i32>) -> Vector2<f32>
     {
         let v: Vector2<f32> = bounds.cast();
 
-        // 1920 for the height of my monitor
-        // its not pixel perfect anyway so why bother getting actual resolution
-        v / 1920.0
+        v.component_div(size)
     }
 
     pub fn calculate_bounds(
         info: TextInfo,
-        fonts: &FontsContainer
+        fonts: &FontsContainer,
+        screen_size: &Vector2<f32>
     ) -> Vector2<f32>
     {
-        Self::bounds_to_global(Self::calculate_bounds_pixels(info, fonts).1)
+        Self::bounds_to_global(screen_size, Self::calculate_bounds_pixels(info, fonts).1)
     }
 
     pub fn text_size(&self) -> Vector2<f32>

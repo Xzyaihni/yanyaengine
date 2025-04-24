@@ -20,6 +20,7 @@ pub struct BuilderWrapper<'a>
 {
     resource_uploader: ResourceUploader<'a>,
     object_factory: Rc<ObjectFactory>,
+    size: Vector2<f32>,
     fonts: Rc<FontsContainer>
 }
 
@@ -28,10 +29,11 @@ impl<'a> BuilderWrapper<'a>
     pub fn new(
         resource_uploader: ResourceUploader<'a>,
         object_factory: Rc<ObjectFactory>,
+        size: Vector2<f32>,
         fonts: Rc<FontsContainer>
     ) -> Self
     {
-        Self{resource_uploader, object_factory, fonts}
+        Self{resource_uploader, object_factory, size, fonts}
     }
 
     pub fn fonts(&self) -> &Rc<FontsContainer>
@@ -56,6 +58,7 @@ impl<'a> BuilderWrapper<'a>
         TextFactory::new(
             &mut self.resource_uploader,
             self.object_factory.clone(),
+            self.size,
             &self.fonts
         )
     }
@@ -85,6 +88,6 @@ impl<'a> BuilderWrapper<'a>
         info: TextInfo
     ) -> Vector2<f32>
     {
-        TextObject::calculate_bounds(info, &self.fonts)
+        TextObject::calculate_bounds(info, &self.fonts, &self.size)
     }
 }

@@ -3,6 +3,8 @@ use std::{
     sync::Arc
 };
 
+use nalgebra::Vector2;
+
 use parking_lot::Mutex;
 
 use vulkano::{
@@ -73,6 +75,7 @@ impl Engine
         let builder_wrapper = BuilderWrapper::new(
             resource_uploader,
             self.object_factory.clone(),
+            Vector2::new(size[0], size[1]),
             self.fonts_info.clone()
         );
 
