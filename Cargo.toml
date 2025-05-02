@@ -15,6 +15,5 @@ strum = { version = "0.27", features = ["derive"] }
 vulkano = "0.35.1"
 vulkano-shaders = "0.35.0"
 winit = { version = "0.30.10", features = ["rwh_05", "serde"] }
-font-kit = "0.14.2"
-pathfinder_geometry = "0.5.1"
 foldhash = "0.1.5"
+ab_glyph = "0.2.29"

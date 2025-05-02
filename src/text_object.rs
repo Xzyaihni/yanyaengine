@@ -5,19 +5,9 @@ use std::{
 
 use parking_lot::RwLock;
 
-use font_kit::{
-    metrics::Metrics,
-    hinting::HintingOptions,
-    font::Font,
-    canvas::{RasterizationOptions, Format, Canvas}
-};
-
-use pathfinder_geometry::{
-    transform2d::Transform2F,
-    vector::{Vector2I, Vector2F}
-};
-
 use nalgebra::{Vector2, Vector3};
+
+use ab_glyph::FontVec;
 
 use serde::{Serialize, Deserialize};
 
@@ -59,15 +49,12 @@ impl TextObject
         object_factory: &ObjectFactory,
         screen_size: &Vector2<f32>,
         info: TextCreateInfo,
-        fonts: &FontsContainer,
+        font: &CharsRasterizer,
         location: UniformLocation,
         shader: ShaderId
     ) -> Self
     {
-        /*let current_font = fonts.get(info.inner.font).expect("style must exist");
-
-        let align = info.inner.align.clone();
-        let font_size = info.inner.font_size;
+        /*let font_size = info.inner.font_size;
 
         let (chars_info, size, height_single) = Self::calculate_bounds_pixels(info.inner, fonts);
 
@@ -118,11 +105,9 @@ impl TextObject
 
     /*pub fn calculate_bounds_pixels(
         info: TextInfo,
-        fonts: &FontsContainer
+        font: &CharsRasterizer
     ) -> (Vec<(i32, usize, char)>, Vector2<i32>, i32)
     {
-        let current_font = fonts.get(info.font).expect("style must exist");
-
         let mut full_bounds = BoundsCalculator::new();
 
         let lines_count = info.text.lines().count();
@@ -132,8 +117,7 @@ impl TextObject
             // i dunno how to not collect >_<
             line.chars().into_iter().map(|c|
             {
-                let x = Self::with_font(
-                    current_font,
+                let x = font.bounds(
                     &mut full_bounds,
                     info.font_size,
                     c
@@ -165,47 +149,17 @@ impl TextObject
 
     pub fn calculate_bounds(
         info: TextInfo,
-        fonts: &FontsContainer,
+        font: &CharsRasterizer,
         screen_size: &Vector2<f32>
     ) -> Vector2<f32>
     {
         Vector2::zeros()
-        // Self::bounds_to_global(screen_size, Self::calculate_bounds_pixels(info, fonts).1)
+        // Self::bounds_to_global(screen_size, Self::calculate_bounds_pixels(info, font).1)
     }
 
     pub fn text_size(&self) -> Vector2<f32>
     {
         self.size
-    }
-
-    pub fn update_scale(&mut self)
-    {
-        dbg!();
-        /*if let Some(object) = self.object.as_mut()
-        {
-            let align = if let Some(x) = self.align.as_ref() { x } else { return; };
-
-            let scale = object.scale();
-
-            let model_size = if scale.x.classify() == FpCategory::Zero || scale.y.classify() == FpCategory::Zero
-            {
-                Vector2::zeros()
-            } else
-            {
-                self.size.component_div(&scale.xy())
-            };
-
-            let shift = (Vector2::repeat(1.0) - model_size.xy()) / 2.0;
-
-            let mut model = Model::rectangle(model_size.x, model_size.y);
-            model.shift(Vector3::new(
-                shift.x * align.horizontal.sign(),
-                shift.y * align.vertical.sign(),
-                0.0
-            ));
-
-            object.set_inplace_model_same_sized(model);
-        }*/
     }
 
     /*fn canvas_to_texture(
@@ -224,29 +178,6 @@ impl TextObject
         let texture = Texture::new(resource_uploader, image.into(), location, shader);
 
         Arc::new(RwLock::new(texture))
-    }
-
-    fn with_font(
-        rasterizer: &CharsRasterizer,
-        bounds_calculator: &mut BoundsCalculator,
-        font_size: u32,
-        c: char
-    ) -> (i32, BoundsInfo)
-    {
-        let GlyphInfo{offset, width, height} = rasterizer.glyph_info(font_size, c);
-
-        let advance = (rasterizer.advance(c) * font_size as f32).round() as i32;
-
-        let info = BoundsInfo{
-            origin: offset,
-            width,
-            height,
-            advance
-        };
-
-        let x = bounds_calculator.process_character(info.clone());
-
-        (x, info)
     }*/
 
     pub fn texture(&self) -> Option<&Arc<RwLock<Texture>>>
@@ -289,12 +220,12 @@ pub struct OriginOffset
 
 pub struct CharsRasterizer
 {
-    font: Font
+    font: FontVec
 }
 
 impl CharsRasterizer
 {
-    pub fn new(font: Font) -> Self
+    pub fn new(font: FontVec) -> Self
     {
         Self{font}
     }
@@ -304,162 +235,26 @@ impl CharsRasterizer
         self.font.metrics()
     }
 
-    pub fn units_per_em(&self) -> f32
-    {
-        self.metrics().units_per_em as f32
-    }
-
-    pub fn advance(&self, c: char) -> f32
-    {
-        const DEFAULT_ADVANCE: f32 = 0.0;
-
-        let id = match self.font.glyph_for_char(c)
-        {
-            Some(id) => id,
-            None =>
-            {
-                // eprintln!("couldnt get the advance of {c}, returning {DEFAULT_ADVANCE}");
-                return DEFAULT_ADVANCE
-            }
-        };
-
-        let advance = match self.font.advance(id)
-        {
-            Ok(id) => id,
-            Err(_err) =>
-            {
-                // eprintln!("couldnt get the advance of {c} ({err}), returning {DEFAULT_ADVANCE}");
-                return DEFAULT_ADVANCE
-            }
-        };
-
-        advance.x() / self.units_per_em()
-    }
-
-    fn glyph_info(
-        &self,
+    fn with_font(
+        rasterizer: &CharsRasterizer,
+        bounds_calculator: &mut BoundsCalculator,
         font_size: u32,
         c: char
-    ) -> GlyphInfo
+    ) -> (i32, BoundsInfo)
     {
-        let id = match self.font.glyph_for_char(c)
-        {
-            Some(id) => id,
-            None =>
-            {
-                eprintln!("couldnt get the offset of {c}");
-                return GlyphInfo{
-                    offset: OriginOffset{
-                        x: 0,
-                        y: 0
-                    },
-                    width: 0,
-                    height: 0
-                };
-            }
+        let GlyphInfo{offset, width, height} = rasterizer.glyph_info(font_size, c);
+
+        let advance = (rasterizer.advance(c) * font_size as f32).round() as i32;
+
+        let info = BoundsInfo{
+            origin: offset,
+            width,
+            height,
+            advance
         };
 
-        let font_size_f = font_size as f32;
-        let bounds = self.font.raster_bounds(
-            id,
-            font_size_f,
-            Transform2F::from_translation(Vector2F::new(0.0, font_size_f)),
-            HintingOptions::None,
-            RasterizationOptions::GrayscaleAa
-        ).unwrap();
+        let x = bounds_calculator.process_character(info.clone());
 
-        let offset = OriginOffset{
-            x: bounds.origin().x(),
-            y: bounds.origin().y()
-        };
-
-        GlyphInfo{
-            offset,
-            width: bounds.size().x() as u32,
-            height: bounds.size().y() as u32
-        }
-    }
-
-    pub fn render_glyph(
-        &self,
-        canvas: &mut Canvas,
-        height: i32,
-        font_size: u32,
-        char_x: i32,
-        char_y: usize,
-        c: char
-    ) -> Option<()>
-    {
-        let small = self.render_small(font_size, height, c)?;
-
-        let start_x = char_x.max(0) as usize;
-
-        let big_width = canvas.size.x() as usize;
-
-        let width = small.size.x() as usize;
-
-        let y_offset = char_y * height as usize;
-
-        for y in 0..height as usize
-        {
-            for x in 0..width
-            {
-                let offset_x = start_x + x;
-                if offset_x >= big_width
-                {
-                    continue;
-                }
-
-                let small_y = y * width;
-                let big_y = (y + y_offset) * big_width;
-
-                let this_pixel = &mut canvas.pixels[big_y + offset_x];
-                *this_pixel = this_pixel.saturating_add(small.pixels[small_y + x]);
-            }
-        }
-
-        Some(())
-    }
-
-    fn render_small(
-        &self,
-        font_size: u32,
-        canvas_height: i32,
-        c: char
-    ) -> Option<Canvas>
-    {
-        let id = self.font.glyph_for_char(c)?;
-
-        let point_size = font_size as f32;
-
-        let hinting = HintingOptions::None;
-        let options = RasterizationOptions::GrayscaleAa;
-
-        let bounds = self.font.raster_bounds(
-            id,
-            point_size,
-            Transform2F::from_translation(Vector2F::new(0.0, 0.0)),
-            hinting,
-            options
-        ).ok()?;
-
-        let mut canvas = Canvas::new(Vector2I::new(font_size as i32, canvas_height), Format::A8);
-
-        let origin = bounds.origin();
-        let offset = Vector2F::new(
-            -origin.x() as f32,
-            font_size as f32
-        );
-
-        self.font.rasterize_glyph(
-            &mut canvas,
-            id,
-            point_size,
-            Transform2F::from_translation(offset),
-            hinting,
-            options
-        ).ok()?;
-
-        Some(canvas)
+        (x, info)
     }*/
 }

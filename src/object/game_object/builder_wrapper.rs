@@ -88,6 +88,6 @@ impl<'a> BuilderWrapper<'a>
         info: TextInfo
     ) -> Vector2<f32>
     {
-        TextObject::calculate_bounds(info, &self.fonts, &self.size)
+        TextObject::calculate_bounds(info, self.fonts.default_font(), &self.size)
     }
 }
