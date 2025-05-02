@@ -127,11 +127,13 @@ impl GameObject for SolidObject
 
         let size = self.model.read().vertices.len() as u32;
 
-        info.object_info.builder_wrapper.builder()
-            .bind_vertex_buffers(0, self.subbuffer.clone())
-            .unwrap()
-            .draw(size, 1, 0, 0)
-            .unwrap();
+        unsafe{
+            info.object_info.builder_wrapper.builder()
+                .bind_vertex_buffers(0, self.subbuffer.clone())
+                .unwrap()
+                .draw(size, 1, 0, 0)
+                .unwrap();
+        }
     }
 }
 

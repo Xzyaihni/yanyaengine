@@ -39,131 +39,6 @@ use crate::{
 };
 
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-struct BoundsInfo
-{
-    origin: OriginOffset,
-    width: u32,
-    height: u32,
-    advance: i32
-}
-
-#[allow(dead_code)]
-struct BoundsCalculator
-{
-    width: i32,
-    x: i32,
-    y: u32
-}
-
-impl BoundsCalculator
-{
-    pub fn new() -> Self
-    {
-        Self{
-            width: 0,
-            x: 0,
-            y: 0
-        }
-    }
-
-    pub fn process_character(&mut self, info: BoundsInfo) -> i32
-    {
-        self.width = self.width.max(self.x + info.origin.x + info.width as i32);
-
-        let this_x = self.x + info.origin.x;
-
-        self.x += info.advance;
-
-        this_x
-    }
-
-    pub fn return_carriage(&mut self)
-    {
-        self.x = 0;
-    }
-}
-
-#[derive(Debug)]
-pub struct GlyphInfo
-{
-    pub offset: OriginOffset,
-    pub width: u32,
-    pub height: u32
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HorizontalAlign
-{
-    Left,
-    Middle,
-    Right
-}
-
-impl HorizontalAlign
-{
-    pub fn sign(self) -> f32
-    {
-        match self
-        {
-            Self::Left => -1.0,
-            Self::Middle => 0.0,
-            Self::Right => 1.0
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VerticalAlign
-{
-    Top,
-    Middle,
-    Bottom
-}
-
-impl VerticalAlign
-{
-    pub fn sign(self) -> f32
-    {
-        match self
-        {
-            Self::Top => -1.0,
-            Self::Middle => 0.0,
-            Self::Bottom => 1.0
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TextAlign
-{
-    pub horizontal: HorizontalAlign,
-    pub vertical: VerticalAlign
-}
-
-impl Default for TextAlign
-{
-    fn default() -> Self
-    {
-        Self{
-            horizontal: HorizontalAlign::Left,
-            vertical: VerticalAlign::Top
-        }
-    }
-}
-
-impl TextAlign
-{
-    pub fn centered() -> Self
-    {
-        Self{
-            horizontal: HorizontalAlign::Middle,
-            vertical: VerticalAlign::Middle
-        }
-    }
-}
-
 pub struct TextCreateInfo<'a>
 {
     pub transform: Transform,
@@ -174,7 +49,6 @@ pub struct TextCreateInfo<'a>
 pub struct TextObject
 {
     pub object: Option<Object>,
-    align: Option<TextAlign>,
     size: Vector2<f32>
 }
 
@@ -190,7 +64,7 @@ impl TextObject
         shader: ShaderId
     ) -> Self
     {
-        let current_font = fonts.get(info.inner.font).expect("style must exist");
+        /*let current_font = fonts.get(info.inner.font).expect("style must exist");
 
         let align = info.inner.align.clone();
         let font_size = info.inner.font_size;
@@ -239,10 +113,10 @@ impl TextObject
 
         this.update_scale();
 
-        this
+        this*/todo!()
     }
 
-    pub fn calculate_bounds_pixels(
+    /*pub fn calculate_bounds_pixels(
         info: TextInfo,
         fonts: &FontsContainer
     ) -> (Vec<(i32, usize, char)>, Vector2<i32>, i32)
@@ -280,7 +154,7 @@ impl TextObject
         let width = full_bounds.width;
 
         (chars_info, Vector2::new(width, height), height_single)
-    }
+    }*/
 
     fn bounds_to_global(size: &Vector2<f32>, bounds: Vector2<i32>) -> Vector2<f32>
     {
@@ -295,7 +169,8 @@ impl TextObject
         screen_size: &Vector2<f32>
     ) -> Vector2<f32>
     {
-        Self::bounds_to_global(screen_size, Self::calculate_bounds_pixels(info, fonts).1)
+        Vector2::zeros()
+        // Self::bounds_to_global(screen_size, Self::calculate_bounds_pixels(info, fonts).1)
     }
 
     pub fn text_size(&self) -> Vector2<f32>
@@ -305,7 +180,8 @@ impl TextObject
 
     pub fn update_scale(&mut self)
     {
-        if let Some(object) = self.object.as_mut()
+        dbg!();
+        /*if let Some(object) = self.object.as_mut()
         {
             let align = if let Some(x) = self.align.as_ref() { x } else { return; };
 
@@ -329,10 +205,10 @@ impl TextObject
             ));
 
             object.set_inplace_model_same_sized(model);
-        }
+        }*/
     }
 
-    fn canvas_to_texture(
+    /*fn canvas_to_texture(
         resource_uploader: &mut ResourceUploader,
         canvas: Canvas,
         location: UniformLocation,
@@ -371,7 +247,7 @@ impl TextObject
         let x = bounds_calculator.process_character(info.clone());
 
         (x, info)
-    }
+    }*/
 
     pub fn texture(&self) -> Option<&Arc<RwLock<Texture>>>
     {
@@ -423,7 +299,7 @@ impl CharsRasterizer
         Self{font}
     }
 
-    pub fn metrics(&self) -> Metrics
+    /*pub fn metrics(&self) -> Metrics
     {
         self.font.metrics()
     }
@@ -585,5 +461,5 @@ impl CharsRasterizer
         ).ok()?;
 
         Some(canvas)
-    }
+    }*/
 }

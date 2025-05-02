@@ -20,7 +20,7 @@ use vulkano::{
         view::ImageView
     },
     descriptor_set::{
-        PersistentDescriptorSet,
+        DescriptorSet,
         WriteDescriptorSet
     }
 };
@@ -299,7 +299,7 @@ impl fmt::Debug for RgbaImage
 pub struct Texture
 {
     view: Arc<ImageView>,
-    descriptor_set: Arc<PersistentDescriptorSet>,
+    descriptor_set: Arc<DescriptorSet>,
     location: UniformLocation,
     shader: ShaderId
 }
@@ -402,15 +402,15 @@ impl Texture
         resource_uploader: &ResourceUploader,
         location: UniformLocation,
         shader: ShaderId
-    ) -> Arc<PersistentDescriptorSet>
+    ) -> Arc<DescriptorSet>
     {
         let info = &resource_uploader.pipeline_infos[shader.get_raw()];
         let descriptor_layout = info.layout.set_layouts().get(location.set as usize)
             .unwrap()
             .clone();
 
-        PersistentDescriptorSet::new(
-            &resource_uploader.descriptor_allocator,
+        DescriptorSet::new(
+            resource_uploader.descriptor_allocator.clone(),
             descriptor_layout,
             [
                 WriteDescriptorSet::image_view_sampler(
@@ -421,7 +421,7 @@ impl Texture
         ).unwrap()
     }
 
-    pub fn descriptor_set(&self) -> Arc<PersistentDescriptorSet>
+    pub fn descriptor_set(&self) -> Arc<DescriptorSet>
     {
         self.descriptor_set.clone()
     }

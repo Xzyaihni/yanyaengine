@@ -14,7 +14,6 @@ use nalgebra::Vector2;
 use crate::{
     ObjectFactory,
     TextObject,
-    TextAlign,
     UniformLocation,
     ShaderId,
     text_object::CharsRasterizer,
@@ -94,7 +93,6 @@ pub struct TextInfo<'a>
 {
     pub font_size: u32,
     pub font: FontStyle,
-    pub align: Option<TextAlign>,
     pub text: &'a str
 }
 

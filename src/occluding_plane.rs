@@ -152,11 +152,13 @@ impl OccludingPlane
 
         let square_vertices = Model::square(1.0).vertices.len() as u32;
 
-        info.object_info.builder_wrapper.builder()
-            .bind_vertex_buffers(0, self.subbuffer.clone())
-            .unwrap()
-            .draw(square_vertices, 1, 0, 0)
-            .unwrap();
+        unsafe{
+            info.object_info.builder_wrapper.builder()
+                .bind_vertex_buffers(0, self.subbuffer.clone())
+                .unwrap()
+                .draw(square_vertices, 1, 0, 0)
+                .unwrap();
+        }
     }
 
     impl_updated_check!{}

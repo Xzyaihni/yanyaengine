@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytemuck = "1.13.1"
-image = "0.24.6"
-nalgebra = { version = "0.32.2", features = ["serde-serialize"] }
-parking_lot = { version = "0.12.1", default-features = false }
-serde = { version = "1.0.164", features = ["derive"] }
-strum = { version = "0.26", features = ["derive"] }
-vulkano = "0.34.1"
-vulkano-shaders = "0.34.0"
-winit = { version = "0.29.3", features = ["rwh_05", "serde"] }
-font-kit = "0.13.2"
+bytemuck = "1.23.0"
+image = "0.25.6"
+nalgebra = { version = "0.33.2", features = ["serde-serialize"] }
+parking_lot = { version = "0.12.3", default-features = false }
+serde = { version = "1.0.219", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
+vulkano = "0.35.1"
+vulkano-shaders = "0.35.0"
+winit = { version = "0.30.10", features = ["rwh_05", "serde"] }
+font-kit = "0.14.2"
 pathfinder_geometry = "0.5.1"
-ahash = "0.8.11"
+foldhash = "0.1.5"

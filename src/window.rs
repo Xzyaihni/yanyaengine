@@ -6,6 +6,7 @@ use std::{
 use vulkano::{
     Validated,
     VulkanError,
+    VulkanLibrary,
     format::{Format, NumericFormat, ClearValue},
     memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     descriptor_set::allocator::StandardDescriptorSetAllocator,
@@ -20,6 +21,7 @@ use vulkano::{
         GraphicsPipeline,
         PipelineShaderStageCreateInfo,
         DynamicState,
+        layout::PipelineDescriptorSetLayoutCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             multisample::MultisampleState,
@@ -58,8 +60,12 @@ use vulkano::{
     },
     device::{
         Device,
-        physical::PhysicalDevice,
-        Queue
+        DeviceExtensions,
+        DeviceCreateInfo,
+        QueueCreateInfo,
+        QueueFlags,
+        Queue,
+        physical::{PhysicalDevice, PhysicalDeviceType}
     },
     render_pass::{
         Subpass,
@@ -75,19 +81,20 @@ use vulkano::{
         SubpassContents,
         SubpassBeginInfo,
         RenderPassBeginInfo,
-        allocator::StandardCommandBufferAllocator
-    }
+        allocator::{CommandBufferAllocator, StandardCommandBufferAllocator}
+    },
+    instance::{Instance, InstanceCreateInfo}
 };
 
 use winit::{
+    application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
-    window::Window,
+    window::{Window, WindowId, WindowAttributes},
     event::{
-        Event,
         WindowEvent,
         MouseScrollDelta
     },
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget}
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, DeviceEvents}
 };
 
 use crate::{
@@ -95,6 +102,7 @@ use crate::{
     AppOptions,
     Control,
     ShadersGroup,
+    ShadersContainer,
     engine::Engine,
     game_object::*,
     object::resource_uploader::ResourceUploader
@@ -342,7 +350,7 @@ impl<T: Clone> RenderInfo<T>
         device: Arc<Device>
     ) -> PipelineInfo
     {
-        let mut dynamic_state = ahash::HashSet::default();
+        let mut dynamic_state = foldhash::HashSet::default();
         dynamic_state.insert(DynamicState::Scissor);
 
         let pipeline = GraphicsPipeline::new(
@@ -351,7 +359,7 @@ impl<T: Clone> RenderInfo<T>
             GraphicsPipelineCreateInfo{
                 stages: shader.stages.iter().cloned().collect(),
                 vertex_input_state: Some(shader.per_vertex
-                    .definition(&shader.shaders.vertex.info().input_interface)
+                    .definition(&shader.shaders.vertex)
                     .unwrap()
                 ),
                 input_assembly_state: Some(InputAssemblyState::default()),
@@ -475,11 +483,19 @@ impl<T: Clone> RenderInfo<T>
         Self::surface_size_associated(&self.surface)
     }
 
+    pub fn window(&self) -> &Window
+    {
+        Self::window_associated(&self.surface)
+    }
+
+    fn window_associated(surface: &Arc<Surface>) -> &Window
+    {
+        surface.object().unwrap().downcast_ref::<Window>().unwrap()
+    }
+
     fn surface_size_associated(surface: &Arc<Surface>) -> PhysicalSize<u32>
     {
-        let window = surface.object().unwrap().downcast_ref::<Window>().unwrap();
-
-        window.inner_size()
+        Self::window_associated(surface).inner_size()
     }
 }
 
@@ -493,10 +509,12 @@ pub struct GraphicsInfo<T>
     pub rendering: Rendering<T>
 }
 
+pub type ThisCommandBufferAllocator = Arc<(dyn CommandBufferAllocator + 'static)>;
+
 // stupid code duplication but im lazy wutever
 struct HandleEventInfoRaw<T>
 {
-    command_allocator: StandardCommandBufferAllocator,
+    command_allocator: ThisCommandBufferAllocator,
     queue: Arc<Queue>,
     fence: FutureType,
     device: Arc<Device>,
@@ -506,7 +524,7 @@ struct HandleEventInfoRaw<T>
 
 struct HandleEventInfo<UserApp, T>
 {
-    command_allocator: StandardCommandBufferAllocator,
+    command_allocator: ThisCommandBufferAllocator,
     queue: Arc<Queue>,
     fence: FutureType,
     device: Arc<Device>,
@@ -543,189 +561,343 @@ impl<UserApp, T> From<HandleEventInfoRaw<T>> for HandleEventInfo<UserApp, T>
     }
 }
 
+pub struct InfoInit<T>
+{
+    pub window_attributes: WindowAttributes,
+    pub rendering: Rendering<T>,
+    pub shaders: ShadersContainer,
+    pub options: AppOptions
+}
+
+impl<T: Clone> InfoInit<T>
+{
+    fn initialize<UserApp: YanyaApp + 'static>(self, event_loop: &ActiveEventLoop) -> HandleEventInfo<UserApp, T>
+    {
+        let library = VulkanLibrary::new().expect("nyo vulkan? ;-;");
+
+        let enabled_extensions = Surface::required_extensions(&event_loop).expect("cant get required extensions");
+        let instance = Instance::new(
+            library,
+            InstanceCreateInfo{
+                enabled_extensions,
+                ..Default::default()
+            }
+        ).expect("cant create vulkan instance..");
+
+        let window = Arc::new(event_loop.create_window(self.window_attributes).unwrap());
+
+        let surface = Surface::from_window(instance.clone(), window)
+            .unwrap();
+
+        let (physical_device, (device, queues)) = create_device(surface.clone(), instance);
+
+        let pipeline_infos = self.shaders.into_iter().enumerate().map(|(index, shader_item)|
+        {
+            let shader = shader_item.shader.load(device.clone());
+
+            let stages = ShadersGroup::from(shader.clone()).stages();
+
+            let info = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
+                .into_pipeline_layout_create_info(device.clone())
+                .unwrap();
+
+            let layout = PipelineLayout::new(device.clone(), info).unwrap();
+
+            let per_vertex = shader_item.per_vertex.unwrap_or_else(||
+            {
+                panic!("per_vertex must be provided for shader #{index}")
+            });
+
+            PipelineCreateInfo{
+                stages: stages.into(),
+                shaders: shader,
+                per_vertex,
+                layout,
+                depth: shader_item.depth,
+                stencil: shader_item.stencil
+            }
+        }).collect();
+
+        let info = GraphicsInfo{
+            surface,
+            physical_device,
+            device,
+            pipeline_infos,
+            queues: queues.collect(),
+            rendering: self.rendering
+        };
+
+        let capabilities = info.physical_device
+            .surface_capabilities(&info.surface, Default::default())
+            .unwrap();
+
+        let composite_alpha =
+        {
+            let supported = capabilities.supported_composite_alpha;
+
+            let preferred = CompositeAlpha::Opaque;
+            let supports_preferred = supported.contains_enum(preferred);
+
+            if supports_preferred
+            {
+                preferred
+            } else
+            {
+                supported.into_iter().next().unwrap()
+            }
+        };
+
+        let formats = info.physical_device
+            .surface_formats(&info.surface, Default::default())
+            .unwrap();
+
+        let image_format = formats.iter().find(|(format, colorspace)|
+        {
+            format.numeric_format_color() == Some(NumericFormat::SRGB)
+                && *colorspace == ColorSpace::SrgbNonLinear
+        }).unwrap_or_else(|| &formats[0]).0;
+
+        let device = info.device.clone();
+        let queue = info.queues[0].clone();
+
+        let render_info = RenderInfo::new(
+            info,
+            capabilities,
+            image_format,
+            composite_alpha
+        );
+
+        HandleEventInfo::from(
+            HandleEventInfoRaw{
+                fence: None,
+                command_allocator: Arc::new(StandardCommandBufferAllocator::new(
+                    device.clone(),
+                    Default::default()
+                )),
+                queue,
+                render_info,
+                device,
+                options: self.options
+            }
+        )
+    }
+}
+
 pub fn run<UserApp: YanyaApp + 'static, T: Clone>(
-    info: GraphicsInfo<T>,
-    event_loop: EventLoop<()>,
-    options: AppOptions,
+    info_init: InfoInit<T>,
     app_init: UserApp::AppInfo
 )
 {
-    let capabilities = info.physical_device
-        .surface_capabilities(&info.surface, Default::default())
-        .unwrap();
-
-    let composite_alpha =
-    {
-        let supported = capabilities.supported_composite_alpha;
-
-        let preferred = CompositeAlpha::Opaque;
-        let supports_preferred = supported.contains_enum(preferred);
-
-        if supports_preferred
-        {
-            preferred
-        } else
-        {
-            supported.into_iter().next().unwrap()
-        }
+    let mut app: WindowEventHandler<UserApp, UserApp::AppInfo, T> = WindowEventHandler{
+        info_init: Some(info_init),
+        info: None,
+        app_init: Some(app_init)
     };
 
-    let formats = info.physical_device
-        .surface_formats(&info.surface, Default::default())
-        .unwrap();
+    let event_loop = EventLoop::new().unwrap();
 
-    let image_format = formats.iter().find(|(format, colorspace)|
-    {
-        format.numeric_format_color() == Some(NumericFormat::SRGB)
-            && *colorspace == ColorSpace::SrgbNonLinear
-    }).unwrap_or_else(|| &formats[0]).0;
-
-    let device = info.device.clone();
-    let queue = info.queues[0].clone();
-
-    let render_info = RenderInfo::new(
-        info,
-        capabilities,
-        image_format,
-        composite_alpha
-    );
-
-    let mut handle_info: HandleEventInfo<UserApp, T> = HandleEventInfo::from(
-        HandleEventInfoRaw{
-            fence: None,
-            command_allocator: StandardCommandBufferAllocator::new(
-                device.clone(),
-                Default::default()
-            ),
-            queue,
-            render_info,
-            device,
-            options
-        }
-    );
-
+    event_loop.listen_device_events(DeviceEvents::WhenFocused);
     event_loop.set_control_flow(ControlFlow::Poll);
-
-    let mut app_init: Option<_> = Some(app_init);
-    event_loop.run(move |event, event_loop|
-    {
-        handle_event(&mut handle_info, event, event_loop, &mut app_init);
-    }).unwrap();
+    event_loop.run_app(&mut app).unwrap();
 }
 
-fn handle_event<UserApp: YanyaApp + 'static, T: Clone>(
-    info: &mut HandleEventInfo<UserApp, T>,
-    event: Event<()>,
-    event_loop: &EventLoopWindowTarget<()>,
-    app_init: &mut Option<UserApp::AppInfo>
-)
+fn get_physical(
+    surface: Arc<Surface>,
+    instance: Arc<Instance>,
+    device_extensions: &DeviceExtensions
+) -> (Arc<PhysicalDevice>, u32)
 {
-    match event
+    instance.enumerate_physical_devices()
+        .expect("no devices that support vulkan found :(")
+        .filter(|device| device.supported_extensions().contains(device_extensions))
+        .filter_map(|device|
+        {
+            device.queue_family_properties()
+                .iter()
+                .enumerate()
+                .position(|(index, queue)|
+                {
+                    queue.queue_flags.contains(QueueFlags::GRAPHICS)
+                        && device.surface_support(index as u32, &surface).unwrap_or(false)
+                })
+                .map(|index| (device, index as u32))
+        }).min_by_key(|(device, _)|
+        {
+            match device.properties().device_type
+            {
+                PhysicalDeviceType::DiscreteGpu => 0,
+                PhysicalDeviceType::IntegratedGpu => 1,
+                PhysicalDeviceType::VirtualGpu => 2,
+                PhysicalDeviceType::Cpu => 3,
+                _ => 4
+            }
+        }).expect("no viable device for rendering :(")
+}
+
+fn create_device(
+    surface: Arc<Surface>,
+    instance: Arc<Instance>
+) -> (Arc<PhysicalDevice>, (Arc<Device>, impl ExactSizeIterator<Item=Arc<Queue>>))
+{
+    let device_extensions = DeviceExtensions{
+        khr_swapchain: true,
+        ..DeviceExtensions::empty()
+    };
+
+    let (physical_device, queue_family_index) = get_physical(surface, instance, &device_extensions);
+
+    eprintln!("using {}", physical_device.properties().device_name);
+
+    (physical_device.clone(), Device::new(
+        physical_device,
+        DeviceCreateInfo{
+            queue_create_infos: vec![QueueCreateInfo{
+                queue_family_index,
+                ..Default::default()
+            }],
+            enabled_extensions: device_extensions,
+            ..Default::default()
+        }).expect("couldnt create device...."))
+}
+
+struct WindowEventHandler<UserApp, Init, T>
+{
+    info_init: Option<InfoInit<T>>,
+    info: Option<HandleEventInfo<UserApp, T>>,
+    app_init: Option<Init>
+}
+
+impl<UserApp, Init, T> WindowEventHandler<UserApp, Init, T>
+{
+    fn info(&self) -> &HandleEventInfo<UserApp, T>
     {
-        Event::WindowEvent{
-            event,
-            ..
-        } =>
+        self.info.as_ref().unwrap()
+    }
+
+    fn info_mut(&mut self) -> &mut HandleEventInfo<UserApp, T>
+    {
+        self.info.as_mut().unwrap()
+    }
+}
+
+impl<UserApp: YanyaApp + 'static, T: Clone> ApplicationHandler for WindowEventHandler<UserApp, UserApp::AppInfo, T>
+{
+    fn resumed(&mut self, event_loop: &ActiveEventLoop)
+    {
+        if self.info_init.is_none()
         {
-            match event
-            {
-                WindowEvent::CloseRequested =>
-                {
-                    drop(info.user_app.take());
+            return;
+        }
 
-                    event_loop.exit()
-                },
-                WindowEvent::Resized(_) => info.window_resized = true,
-                WindowEvent::CursorMoved{position, ..} =>
-                {
-                    if !info.initialized
-                    {
-                        return;
-                    }
+        self.info = Some(self.info_init.take().unwrap().initialize(event_loop));
+    }
 
-                    let (width, height): (f64, f64) = info.render_info.surface_size().into();
-
-                    if width == 0.0 || height == 0.0
-                    {
-                        return;
-                    }
-
-                    let position = ((position.x / width).clamp(0.0, 1.0), (position.y / height).clamp(0.0, 1.0));
-
-                    if let Some(app) = info.user_app.as_mut()
-                    {
-                        app.mouse_move(position);
-                    }
-                },
-                WindowEvent::MouseInput{
-                    button,
-                    state,
-                    ..
-                } =>
-                {
-                    if !info.initialized
-                    {
-                        return;
-                    }
-
-                    let control = Control::Mouse{button, state};
-                    if let Some(app) = info.user_app.as_mut()
-                    {
-                        app.input(control);
-                    }
-                },
-                WindowEvent::MouseWheel{delta, ..} =>
-                {
-                    if !info.initialized
-                    {
-                        return;
-                    }
-
-                    let (x, y) = match delta
-                    {
-                        MouseScrollDelta::LineDelta(x, y) => (x as f64, y as f64),
-                        MouseScrollDelta::PixelDelta(PhysicalPosition{x, y}) => (x, y)
-                    };
-
-                    let control = Control::Scroll{x, y};
-                    if let Some(app) = info.user_app.as_mut()
-                    {
-                        app.input(control);
-                    }
-                },
-                WindowEvent::KeyboardInput{event, ..} =>
-                {
-                    if !info.initialized
-                    {
-                        return;
-                    }
-
-                    let control = Control::Keyboard{
-                        logical: event.logical_key,
-                        keycode: event.physical_key,
-                        state: event.state
-                    };
-
-                    if let Some(app) = info.user_app.as_mut()
-                    {
-                        app.input(control);
-                    }
-                },
-                _ => ()
-            }
-        },
-        Event::AboutToWait =>
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent)
+    {
+        if self.info.is_none()
         {
-            let [x, y]: [u32; 2] = info.render_info.surface_size().into();
+            return;
+        }
 
-            if x == 0 || y == 0
+        match event
+        {
+            WindowEvent::CloseRequested =>
             {
-                return;
-            }
+                drop(self.info_mut().user_app.take());
 
-            handle_redraw(info, app_init);
-        },
-        _ => ()
+                event_loop.exit()
+            },
+            WindowEvent::RedrawRequested =>
+            {
+                let [x, y]: [u32; 2] = self.info().render_info.surface_size().into();
+
+                if x == 0 || y == 0
+                {
+                    return;
+                }
+
+                handle_redraw(self.info.as_mut().unwrap(), &mut self.app_init);
+
+                self.info().render_info.window().request_redraw();
+            },
+            WindowEvent::Resized(_) => self.info_mut().window_resized = true,
+            WindowEvent::CursorMoved{position, ..} =>
+            {
+                if !self.info().initialized
+                {
+                    return;
+                }
+
+                let (width, height): (f64, f64) = self.info().render_info.surface_size().into();
+
+                if width == 0.0 || height == 0.0
+                {
+                    return;
+                }
+
+                let position = ((position.x / width).clamp(0.0, 1.0), (position.y / height).clamp(0.0, 1.0));
+
+                if let Some(app) = self.info_mut().user_app.as_mut()
+                {
+                    app.mouse_move(position);
+                }
+            },
+            WindowEvent::MouseInput{
+                button,
+                state,
+                ..
+            } =>
+            {
+                if !self.info().initialized
+                {
+                    return;
+                }
+
+                let control = Control::Mouse{button, state};
+                if let Some(app) = self.info_mut().user_app.as_mut()
+                {
+                    app.input(control);
+                }
+            },
+            WindowEvent::MouseWheel{delta, ..} =>
+            {
+                if !self.info().initialized
+                {
+                    return;
+                }
+
+                let (x, y) = match delta
+                {
+                    MouseScrollDelta::LineDelta(x, y) => (x as f64, y as f64),
+                    MouseScrollDelta::PixelDelta(PhysicalPosition{x, y}) => (x, y)
+                };
+
+                let control = Control::Scroll{x, y};
+                if let Some(app) = self.info_mut().user_app.as_mut()
+                {
+                    app.input(control);
+                }
+            },
+            WindowEvent::KeyboardInput{event, ..} =>
+            {
+                if !self.info().initialized
+                {
+                    return;
+                }
+
+                let control = Control::Keyboard{
+                    logical: event.logical_key,
+                    keycode: event.physical_key,
+                    state: event.state
+                };
+
+                if let Some(app) = self.info_mut().user_app.as_mut()
+                {
+                    app.input(control);
+                }
+            },
+            _ => ()
+        }
     }
 }
 
@@ -735,7 +907,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
 )
 {
     let mut builder = AutoCommandBufferBuilder::primary(
-        &info.command_allocator,
+        info.command_allocator.clone(),
         info.queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit
     ).unwrap();
