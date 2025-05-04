@@ -1,7 +1,5 @@
 use std::{fs, rc::Rc};
 
-use serde::{Serialize, Deserialize};
-
 use nalgebra::Vector2;
 
 use ab_glyph::FontVec;

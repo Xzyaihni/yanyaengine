@@ -1,21 +1,15 @@
-use std::{
-    num::FpCategory,
-    sync::Arc
-};
+use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use nalgebra::{Vector2, Vector3};
+use nalgebra::Vector2;
 
-use ab_glyph::FontVec;
-
-use serde::{Serialize, Deserialize};
+use ab_glyph::{Font, ScaleFont, FontVec, PxScaleFont, Glyph, Point};
 
 use crate::{
     Object,
     ObjectFactory,
     TextInfo,
-    FontsContainer,
     ObjectInfo,
     UniformLocation,
     ShaderId,
@@ -33,6 +27,62 @@ pub struct TextCreateInfo<'a>
 {
     pub transform: Transform,
     pub inner: TextInfo<'a>
+}
+
+struct BoundsInfo<'a>
+{
+    advance: f32,
+    glyph: &'a Glyph
+}
+
+struct BoundsCalculator
+{
+    line_gap: f32,
+    position: Vector2<f32>,
+    width: f32,
+    height: f32
+}
+
+impl BoundsCalculator
+{
+    fn new(line_gap: f32) -> Self
+    {
+        Self{
+            line_gap,
+            position: Vector2::zeros(),
+            width: 0.0,
+            height: 0.0
+        }
+    }
+
+    fn process(&mut self, bounds: BoundsInfo) -> Vector2<f32>
+    {
+        let this_position = self.position;
+
+        self.position.x += bounds.advance;
+
+        self.width = self.width.max(self.position.x);
+        self.height = self.height.max(self.position.y + bounds.glyph.scale.y);
+
+        this_position
+    }
+
+    fn return_carriage(&mut self)
+    {
+        self.position.x = 0.0;
+        self.position.y += self.line_gap;
+    }
+}
+
+struct CharInfo
+{
+    glyph: Glyph
+}
+
+struct ProcessedInfo
+{
+    chars: Vec<CharInfo>,
+    bounds: Vector2<f32>
 }
 
 #[derive(Debug)]
@@ -54,97 +104,74 @@ impl TextObject
         shader: ShaderId
     ) -> Self
     {
-        /*let font_size = info.inner.font_size;
+        let font = font.with_font_size(info.inner.font_size);
+        let ProcessedInfo{chars: chars_info, bounds} = Self::process_text(info.inner, &font);
 
-        let (chars_info, size, height_single) = Self::calculate_bounds_pixels(info.inner, fonts);
+        let global_size = Self::bounds_to_global(screen_size, bounds);
 
-        let global_size = Self::bounds_to_global(screen_size, size);
-
-        if size.x == 0 || size.y == 0
+        if bounds.x <= 0.0 || bounds.y <= 0.0
         {
             return Self{
                 object: None,
-                align,
                 size: global_size
             };
         }
 
-        let mut text_canvas = Canvas::new(
-            Vector2I::new(size.x, size.y),
-            Format::A8
+        let mut image = SimpleImage::filled(
+            Color{r: 255, g: 255, b: 255, a: 0},
+            bounds.x.ceil() as usize,
+            bounds.y.ceil() as usize
         );
 
-        chars_info.into_iter().for_each(|(x, y, c)|
+        chars_info.into_iter().for_each(|info|
         {
-            current_font.render_glyph(
-                &mut text_canvas,
-                height_single,
-                font_size,
-                x,
-                y,
-                c
-            );
+            font.render(&mut image, info);
         });
+
+        let texture = Texture::new(resource_uploader, image.into(), location, shader);
 
         let object = object_factory.create(ObjectInfo{
             model: Arc::new(RwLock::new(Model::square(1.0))),
-            texture: Self::canvas_to_texture(resource_uploader, text_canvas, location, shader),
+            texture: Arc::new(RwLock::new(texture)),
             transform: info.transform
         });
 
-        let mut this = Self{
+        Self{
             object: Some(object),
-            align,
             size: global_size
-        };
-
-        this.update_scale();
-
-        this*/todo!()
+        }
     }
 
-    /*pub fn calculate_bounds_pixels(
+    fn process_text(
         info: TextInfo,
-        font: &CharsRasterizer
-    ) -> (Vec<(i32, usize, char)>, Vector2<i32>, i32)
+        font: &CharsRasterizerScaled
+    ) -> ProcessedInfo
     {
-        let mut full_bounds = BoundsCalculator::new();
+        let mut full_bounds = BoundsCalculator::new(font.font.height() + font.font.line_gap());
 
-        let lines_count = info.text.lines().count();
-        let chars_info: Vec<_> = info.text.lines().enumerate().flat_map(|(y, line)|
+        let chars: Vec<_> = info.text.lines().enumerate().flat_map(|(index, line)|
         {
-            full_bounds.return_carriage();
+            if index != 0
+            {
+                full_bounds.return_carriage();
+            }
+
             // i dunno how to not collect >_<
             line.chars().into_iter().map(|c|
             {
-                let x = font.bounds(
-                    &mut full_bounds,
-                    info.font_size,
-                    c
-                ).0;
-
-                (x, y, c)
+                font.bounds(&mut full_bounds, c)
             }).collect::<Vec<_>>()
         }).collect();
 
-        let metrics = current_font.metrics();
-
-        let height_font = metrics.ascent + metrics.descent.abs();
-
-        let height_single = (height_font / metrics.units_per_em as f32 * info.font_size as f32)
-            .round() as i32;
-
-        let height = height_single * lines_count as i32;
+        let height = full_bounds.height;
         let width = full_bounds.width;
 
-        (chars_info, Vector2::new(width, height), height_single)
-    }*/
+        ProcessedInfo{chars, bounds: Vector2::new(width, height)}
+    }
 
-    fn bounds_to_global(size: &Vector2<f32>, bounds: Vector2<i32>) -> Vector2<f32>
+    fn bounds_to_global(size: &Vector2<f32>, bounds: Vector2<f32>) -> Vector2<f32>
     {
-        let v: Vector2<f32> = bounds.cast();
-
-        v.component_div(size)
+        bounds.component_div(size)
     }
 
     pub fn calculate_bounds(
@@ -153,32 +180,14 @@ impl TextObject
         screen_size: &Vector2<f32>
     ) -> Vector2<f32>
     {
-        Vector2::zeros()
-        // Self::bounds_to_global(screen_size, Self::calculate_bounds_pixels(info, font).1)
+        let font = font.with_font_size(info.font_size);
+        Self::bounds_to_global(screen_size, Self::process_text(info, &font).bounds)
     }
 
     pub fn text_size(&self) -> Vector2<f32>
     {
         self.size
     }
-
-    /*fn canvas_to_texture(
-        resource_uploader: &mut ResourceUploader,
-        canvas: Canvas,
-        location: UniformLocation,
-        shader: ShaderId
-    ) -> Arc<RwLock<Texture>>
-    {
-        let colors = canvas.pixels.into_iter().map(|value|
-        {
-            Color::new(u8::MAX, u8::MAX, u8::MAX, value)
-        }).collect::<Vec<_>>();
-
-        let image = SimpleImage::new(colors, canvas.size.x() as usize, canvas.size.y() as usize);
-        let texture = Texture::new(resource_uploader, image.into(), location, shader);
-
-        Arc::new(RwLock::new(texture))
-    }*/
 
     pub fn texture(&self) -> Option<&Arc<RwLock<Texture>>>
     {
@@ -210,14 +219,6 @@ impl GameObject for TextObject
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub struct OriginOffset
-{
-    pub x: i32,
-    pub y: i32
-}
-
 pub struct CharsRasterizer
 {
     font: FontVec
@@ -230,31 +231,58 @@ impl CharsRasterizer
         Self{font}
     }
 
-    /*pub fn metrics(&self) -> Metrics
+    fn with_font_size(&self, font_size: u32) -> CharsRasterizerScaled
     {
-        self.font.metrics()
+        let pixel_scale = self.font.pt_to_px_scale(font_size as f32).unwrap();
+
+        CharsRasterizerScaled{font: self.font.as_scaled(pixel_scale)}
+    }
+}
+
+struct CharsRasterizerScaled<'a>
+{
+    pub font: PxScaleFont<&'a FontVec>
+}
+
+impl<'a> CharsRasterizerScaled<'a>
+{
+    fn bounds(&self, bounds_calculator: &mut BoundsCalculator, c: char) -> CharInfo
+    {
+        let glyph_id = self.font.glyph_id(c);
+        let mut glyph = self.font.scaled_glyph(c);
+
+        let offset = bounds_calculator.process(BoundsInfo{
+            advance: self.font.h_advance(glyph_id),
+            glyph: &glyph
+        });
+
+        glyph.position = Point{x: offset.x, y: offset.y};
+
+        CharInfo{glyph}
     }
 
-    fn with_font(
-        rasterizer: &CharsRasterizer,
-        bounds_calculator: &mut BoundsCalculator,
-        font_size: u32,
-        c: char
-    ) -> (i32, BoundsInfo)
+    fn render(&self, image: &mut SimpleImage, info: CharInfo)
     {
-        let GlyphInfo{offset, width, height} = rasterizer.glyph_info(font_size, c);
+        let position = info.glyph.position;
+        let ascent = self.font.ascent();
 
-        let advance = (rasterizer.advance(c) * font_size as f32).round() as i32;
+        if let Some(outlined) = self.font.outline_glyph(info.glyph)
+        {
+            let px_bounds = outlined.px_bounds();
 
-        let info = BoundsInfo{
-            origin: offset,
-            width,
-            height,
-            advance
-        };
+            outlined.draw(|x, y, amount|
+            {
+                let x = (x as f32 + position.x) as usize;
+                let y = (y as f32 + ascent + px_bounds.min.y) as usize;
 
-        let x = bounds_calculator.process_character(info.clone());
+                if !((0..image.width).contains(&x) && (0..image.height).contains(&y))
+                {
+                    return;
+                }
 
-        (x, info)
-    }*/
+                let color = Color{r: 255, g: 255, b: 255, a: (amount * 255.0) as u8};
+                image.set_pixel(color, x, y);
+            });
+        }
+    }
 }

@@ -106,6 +106,11 @@ pub struct SimpleImage
 #[allow(dead_code)]
 impl SimpleImage
 {
+    pub fn filled(color: Color, width: usize, height: usize) -> Self
+    {
+        Self::new(vec![color; width * height], width, height)
+    }
+
     pub fn new(colors: Vec<Color>, width: usize, height: usize) -> Self
     {
         Self{colors,  width, height}
