@@ -249,7 +249,7 @@ where
     }
 }
 
-pub type ShadersQuery = Box<dyn Fn(&Path) -> ShaderId>;
+pub type ShadersQuery = Box<dyn Fn(&Path) -> ShaderId + Send + Sync>;
 
 pub struct Assets
 {

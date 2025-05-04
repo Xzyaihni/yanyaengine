@@ -157,7 +157,7 @@ impl TextObject
             }
 
             // i dunno how to not collect >_<
-            line.chars().into_iter().map(|c|
+            line.chars().map(|c|
             {
                 font.bounds(&mut full_bounds, c)
             }).collect::<Vec<_>>()
@@ -244,7 +244,7 @@ struct CharsRasterizerScaled<'a>
     pub font: PxScaleFont<&'a FontVec>
 }
 
-impl<'a> CharsRasterizerScaled<'a>
+impl CharsRasterizerScaled<'_>
 {
     fn bounds(&self, bounds_calculator: &mut BoundsCalculator, c: char) -> CharInfo
     {

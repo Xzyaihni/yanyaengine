@@ -129,21 +129,11 @@ where
     fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
 }
 
+#[derive(Default)]
 pub struct AppOptions
 {
     assets_paths: AssetsPaths,
     shaders_query: Option<ShadersQuery>
-}
-
-impl Default for AppOptions
-{
-    fn default() -> Self
-    {
-        Self{
-            assets_paths: AssetsPaths::default(),
-            shaders_query: None
-        }
-    }
 }
 
 #[derive(Default)]

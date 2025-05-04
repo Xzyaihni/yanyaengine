@@ -383,7 +383,7 @@ impl<T: Clone> RenderInfo<T>
                     }
                 )),
                 depth_stencil_state: Some(DepthStencilState{
-                    depth: shader.depth.clone(),
+                    depth: shader.depth,
                     stencil: shader.stencil.clone(),
                     ..Default::default()
                 }),
@@ -595,7 +595,7 @@ impl<T: Clone> InfoInit<T>
         {
             let shader = shader_item.shader.load(device.clone());
 
-            let stages = ShadersGroup::from(shader.clone()).stages();
+            let stages = shader.clone().stages();
 
             let info = PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
                 .into_pipeline_layout_create_info(device.clone())

@@ -70,7 +70,7 @@ macro_rules! impl_updated_check
     () =>
     {
         #[allow(unused_variables)]
-        fn set_updated(&mut self, object_info: &crate::object::game_object::ObjectCreatePartialInfo)
+        fn set_updated(&mut self, object_info: &$crate::object::game_object::ObjectCreatePartialInfo)
         {
             #[cfg(debug_assertions)]
             {
@@ -79,7 +79,7 @@ macro_rules! impl_updated_check
         }
 
         #[allow(unused_variables)]
-        fn assert_updated(&self, object_info: &crate::object::game_object::ObjectCreatePartialInfo)
+        fn assert_updated(&self, object_info: &$crate::object::game_object::ObjectCreatePartialInfo)
         {
             #[cfg(debug_assertions)]
             {
