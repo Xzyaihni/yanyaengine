@@ -48,6 +48,11 @@ impl FontsContainer
         Self{font_textures}
     }
 
+    pub fn text_height(&self, font_size: u32, screen_height: f32) -> f32
+    {
+        TextObject::text_height(self.default_font(), font_size, screen_height)
+    }
+
     pub fn calculate_bounds(&self, info: TextInfo, size: &Vector2<f32>) -> Vector2<f32>
     {
         TextObject::calculate_bounds(info, self.default_font(), size)

@@ -174,6 +174,15 @@ impl TextObject
         bounds.component_div(size)
     }
 
+    pub fn text_height(
+        font: &CharsRasterizer,
+        font_size: u32,
+        screen_height: f32
+    ) -> f32
+    {
+        font.with_font_size(font_size).height() / screen_height
+    }
+
     pub fn calculate_bounds(
         info: TextInfo,
         font: &CharsRasterizer,
@@ -259,6 +268,11 @@ impl CharsRasterizerScaled<'_>
         glyph.position = Point{x: offset.x, y: offset.y};
 
         CharInfo{glyph}
+    }
+
+    fn height(&self) -> f32
+    {
+        self.font.scale.y
     }
 
     fn render(&self, image: &mut SimpleImage, info: CharInfo)
