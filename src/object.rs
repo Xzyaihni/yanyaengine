@@ -107,15 +107,23 @@ impl NormalGraphicalObject<ObjectVertex> for Object
     impl_updated_check!{}
 }
 
-#[derive(BufferContents, Vertex, Clone, Copy)]
+#[derive(BufferContents, Vertex, Debug, Clone, Copy)]
 #[repr(C)]
-struct ObjectVertex
+pub struct ObjectVertex
 {
     #[format(R32G32B32A32_SFLOAT)]
     pub position: [f32; 4],
 
     #[format(R32G32_SFLOAT)]
     pub uv: [f32; 2]
+}
+
+impl From<([f32; 4], [f32; 2])> for ObjectVertex
+{
+    fn from((position, uv): ([f32; 4], [f32; 2])) -> Self
+    {
+        Self{position, uv}
+    }
 }
 
 pub struct Object

@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use parking_lot::{RwLock, Mutex};
 
+use vulkano::pipeline::graphics::vertex_input::Vertex;
+
 use super::{
     OccludingPlane,
     allocators::ObjectAllocator,
@@ -51,7 +53,11 @@ impl ObjectFactory
 		)
 	}
 
-    pub fn create_solid(&self, model: Arc<RwLock<Model>>, transform: Transform) -> SolidObject
+    pub fn create_solid<VertexType: Vertex + From<([f32; 4], [f32; 2])>>(
+        &self,
+        model: Arc<RwLock<Model>>,
+        transform: Transform
+    ) -> SolidObject<VertexType>
     {
         SolidObject::new(
             model,

@@ -31,6 +31,7 @@ use game_object::*;
 
 pub use object::{
     Object,
+    ObjectVertex,
     game_object,
     resource_uploader::ResourceUploader
 };
@@ -102,10 +103,18 @@ mod default_fragment
 
 #[derive(BufferContents, Vertex, Debug, Clone, Copy)]
 #[repr(C)]
-struct SimpleVertex
+pub struct SimpleVertex
 {
     #[format(R32G32B32A32_SFLOAT)]
     pub position: [f32; 4]
+}
+
+impl From<([f32; 4], [f32; 2])> for SimpleVertex
+{
+    fn from((position, _): ([f32; 4], [f32; 2])) -> Self
+    {
+        Self{position}
+    }
 }
 
 pub trait YanyaApp

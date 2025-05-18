@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 
 use vulkano::{
     buffer::Subbuffer,
-    pipeline::graphics::vertex_input::{VertexBufferDescription, Vertex}
+    pipeline::graphics::vertex_input::Vertex
 };
 
 use nalgebra::{Vector3, Vector4, Matrix4};
@@ -23,23 +23,23 @@ use crate::{
 };
 
 
-pub struct SolidObject
+pub struct SolidObject<VertexType=SimpleVertex>
 {
     model: Arc<RwLock<Model>>,
     transform: ObjectTransform,
-    subbuffer: Subbuffer<[SimpleVertex]>,
+    subbuffer: Subbuffer<[VertexType]>,
     #[cfg(debug_assertions)]
     updated_buffers: bool
 }
 
-impl NormalGraphicalObject<SimpleVertex> for SolidObject
+impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> NormalGraphicalObject<VertexType> for SolidObject<VertexType>
 {
-    fn subbuffer(&self) -> Subbuffer<[SimpleVertex]>
+    fn subbuffer(&self) -> Subbuffer<[VertexType]>
     {
         self.subbuffer.clone()
     }
 
-    fn vertices(&self, projection_view: Matrix4<f32>) -> Box<[SimpleVertex]>
+    fn vertices(&self, projection_view: Matrix4<f32>) -> Box<[VertexType]>
     {
         self.calculate_vertices(projection_view)
     }
@@ -48,7 +48,7 @@ impl NormalGraphicalObject<SimpleVertex> for SolidObject
 }
 
 #[allow(dead_code)]
-impl SolidObject
+impl<VertexType: Vertex + From<([f32; 4], [f32; 2])>> SolidObject<VertexType>
 {
     pub fn new_default(
         model: Arc<RwLock<Model>>,
@@ -77,19 +77,19 @@ impl SolidObject
         }
     }
 
-    fn calculate_vertices(&self, projection_view: Matrix4<f32>) -> Box<[SimpleVertex]>
+    fn calculate_vertices(&self, projection_view: Matrix4<f32>) -> Box<[VertexType]>
     {
         let transform = self.transform.matrix();
 
         let model = self.model.read();
 
-        model.vertices.iter().map(move |vertex|
+        model.vertices.iter().zip(model.uvs.iter()).map(move |(vertex, uv)|
         {
             let vertex = Vector4::new(vertex[0], vertex[1], vertex[2], 1.0);
 
             let vertex = projection_view * transform * vertex;
 
-            SimpleVertex{position: vertex.into()}
+            VertexType::from((vertex.into(), *uv))
         }).collect::<Box<[_]>>()
     }
 
@@ -102,14 +102,9 @@ impl SolidObject
     {
         !self.model.read().vertices.is_empty()
     }
-
-    pub fn per_vertex() -> VertexBufferDescription
-    {
-        SimpleVertex::per_vertex()
-    }
 }
 
-impl GameObject for SolidObject
+impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> GameObject for SolidObject<VertexType>
 {
     fn update_buffers(&mut self, info: &mut UpdateBuffersInfo)
     {
@@ -137,7 +132,7 @@ impl GameObject for SolidObject
     }
 }
 
-impl OnTransformCallback for SolidObject
+impl<VertexType> OnTransformCallback for SolidObject<VertexType>
 {
     fn callback(&mut self)
     {
@@ -145,7 +140,7 @@ impl OnTransformCallback for SolidObject
     }
 }
 
-impl TransformContainer for SolidObject
+impl<VertexType> TransformContainer for SolidObject<VertexType>
 {
     fn transform_ref(&self) -> &Transform
     {
@@ -158,7 +153,7 @@ impl TransformContainer for SolidObject
     }
 }
 
-impl fmt::Debug for SolidObject
+impl<VertexType: fmt::Debug> fmt::Debug for SolidObject<VertexType>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
     {
