@@ -928,7 +928,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
         }
 
         let resource_uploader = info.render_info.resource_uploader(&mut builder);
-        info.engine.as_mut().unwrap().swap_pipelines(&resource_uploader);
+        info.engine.as_mut().unwrap().swap_pipelines();
         info.user_app.as_mut().unwrap().swap_pipelines(&resource_uploader);
 
         if info.window_resized
@@ -970,8 +970,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
             info.engine = Some(Engine::new(
                 &info.options.assets_paths,
                 info.render_info.resource_uploader(&mut builder),
-                info.device.clone(),
-                info.options.shaders_query.take().unwrap()
+                info.device.clone()
             ));
 
             info.user_app = {

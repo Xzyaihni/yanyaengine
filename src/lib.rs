@@ -132,8 +132,7 @@ where
 #[derive(Default)]
 pub struct AppOptions
 {
-    assets_paths: AssetsPaths,
-    shaders_query: Option<ShadersQuery>
+    assets_paths: AssetsPaths
 }
 
 #[derive(Default)]
@@ -289,11 +288,6 @@ pub struct ShaderId(usize);
 
 impl ShaderId
 {
-    pub fn into_always_query(self) -> ShadersQuery
-    {
-        Box::new(move |_| self)
-    }
-
     pub fn get_raw(&self) -> usize
     {
         self.0
@@ -396,12 +390,10 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
 
     pub fn with_shaders(
         mut self,
-        shaders: ShadersContainer,
-        shaders_query: ShadersQuery
+        shaders: ShadersContainer
     ) -> Self
     {
         self.shaders = shaders;
-        self.options.shaders_query = Some(shaders_query);
 
         self
     }
@@ -413,9 +405,7 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
         if self.shaders.is_empty()
         {
             // load default shaders
-            let id = self.shaders.push(Shader::default());
-
-            self.options.shaders_query = Some(Box::new(move |_| id));
+            self.shaders.push(Shader::default());
         }
 
         window::run::<UserApp, T>(

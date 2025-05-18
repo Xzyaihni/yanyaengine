@@ -9,8 +9,6 @@ use crate::{
     TextCreateInfo,
     TextObject,
     ObjectFactory,
-    UniformLocation,
-    ShaderId,
     object::{Texture, texture::RgbaImage, resource_uploader::ResourceUploader},
     text_factory::{FontsContainer, TextFactory}
 };
@@ -41,9 +39,14 @@ impl<'a> BuilderWrapper<'a>
         &self.fonts
     }
 
-    pub fn resource_uploader<'b>(&'b mut self) -> &'b mut ResourceUploader<'a>
+    pub fn resource_uploader_mut<'b>(&'b mut self) -> &'b mut ResourceUploader<'a>
     {
         &mut self.resource_uploader
+    }
+
+    pub fn resource_uploader(&self) -> &ResourceUploader
+    {
+        &self.resource_uploader
     }
 
     pub fn builder(&mut self) -> &mut CommandBuilderType
@@ -65,22 +68,18 @@ impl<'a> BuilderWrapper<'a>
 
     pub fn create_texture(
         &mut self,
-        image: RgbaImage,
-        location: UniformLocation,
-        shader: ShaderId
+        image: RgbaImage
     ) -> Texture
     {
-        Texture::new(&mut self.resource_uploader, image, location, shader)
+        Texture::new(&mut self.resource_uploader, image)
     }
 
     pub fn create_text(
         &mut self,
-        info: TextCreateInfo,
-        location: UniformLocation,
-        shader: ShaderId
+        info: TextCreateInfo
     ) -> TextObject
     {
-        self.text_factory().create(location, shader, info)
+        self.text_factory().create(info)
     }
 
     pub fn text_bounds(

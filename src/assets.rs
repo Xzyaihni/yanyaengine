@@ -7,7 +7,7 @@ use std::{
     ops::{Index, IndexMut}
 };
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use strum::{IntoEnumIterator, EnumIter, IntoStaticStr};
 
@@ -15,8 +15,6 @@ use serde::{Serialize, Deserialize};
 
 use crate::{
     BuilderWrapper,
-    UniformLocation,
-    ShaderId,
     object::{
         resource_uploader::ResourceUploader,
         model::Model,
@@ -249,15 +247,11 @@ where
     }
 }
 
-pub type ShadersQuery = Box<dyn Fn(&Path) -> ShaderId + Send + Sync>;
-
 pub struct Assets
 {
     textures_path: Option<PathBuf>,
-    textures: IdsStorage<TextureId, Arc<RwLock<Texture>>>,
-	models: IdsStorage<ModelId, Arc<RwLock<Model>>>,
-    texture_location: UniformLocation,
-    shaders_query: ShadersQuery
+    textures: IdsStorage<TextureId, Arc<Mutex<Texture>>>,
+	models: IdsStorage<ModelId, Arc<RwLock<Model>>>
 }
 
 impl Assets
@@ -265,9 +259,7 @@ impl Assets
     pub fn new<TexturesPath, ModelsPath>(
         resource_uploader: &mut ResourceUploader,
         textures_path: Option<TexturesPath>,
-        models_path: Option<ModelsPath>,
-        texture_location: UniformLocation,
-        shaders_query: ShadersQuery
+        models_path: Option<ModelsPath>
     ) -> Self
     where
         TexturesPath: AsRef<Path>,
@@ -278,14 +270,12 @@ impl Assets
         {
             FilesLoader::load_images(path).map(|named_value|
             {
-                let shader = shaders_query(&PathBuf::from(&named_value.name));
-
                 named_value.map(|image|
                 {
-                    Texture::new(resource_uploader, image, texture_location, shader)
+                    Texture::new(resource_uploader, image)
                 })
             })
-        });
+        }, |x| Arc::new(Mutex::new(x)));
 
         let mut models = Self::load_resource(models_path, |path|
         {
@@ -293,20 +283,22 @@ impl Assets
             {
                 named_value.map(|path| Model::load(path).unwrap())
             })
-        });
+        }, |x| Arc::new(RwLock::new(x)));
 
         models.extend(Self::create_default_models());
 
         Self{
             textures_path: output_textures_path,
             textures,
-            models,
-            texture_location,
-            shaders_query
+            models
         }
     }
 
-    fn load_resource<Id, T, F, I, P>(maybe_path: Option<P>, f: F) -> IdsStorage<Id, Arc<RwLock<T>>>
+    fn load_resource<Id, T, U, F, I, P>(
+        maybe_path: Option<P>,
+        f: F,
+        m: impl Fn(T) -> U
+    ) -> IdsStorage<Id, U>
     where
         Id: From<usize> + Clone,
         P: AsRef<Path>,
@@ -317,7 +309,7 @@ impl Assets
         {
             f(path).map(|NamedValue{name, value}|
             {
-                (name, Arc::new(RwLock::new(value)))
+                (name, m(value))
             }).collect()
         }).unwrap_or_default()
     }
@@ -332,12 +324,12 @@ impl Assets
         *self.textures.get_id(name)
     }
 
-    pub fn texture_by_name(&self, name: &str) -> &Arc<RwLock<Texture>>
+    pub fn texture_by_name(&self, name: &str) -> &Arc<Mutex<Texture>>
     {
         &self.textures[*self.textures.get_id(name)]
     }
 
-    pub fn texture(&self, id: TextureId) -> &Arc<RwLock<Texture>>
+    pub fn texture(&self, id: TextureId) -> &Arc<Mutex<Texture>>
     {
         &self.textures[id]
     }
@@ -370,34 +362,28 @@ impl Assets
         let mut image = SimpleImage::load(&filepath).unwrap();
         f(&mut image);
 
-        let shader = (self.shaders_query)(&filepath);
+        let texture = builder_wrapper.create_texture(image.into());
 
-        let texture = builder_wrapper.create_texture(
-            image.into(),
-            self.texture_location,
-            shader
-        );
-
-        self.textures.insert((name.to_owned(), Arc::new(RwLock::new(texture))))
+        self.textures.insert((name.to_owned(), Arc::new(Mutex::new(texture))))
     }
 
     pub fn add_textures<T>(&mut self, textures: T)
     where
         T: IntoIterator<Item=(String, Texture)>
     {
-        Self::add_assets(textures.into_iter(), &mut self.textures);
+        self.textures.extend(textures.into_iter().map(|(a, b)| (a, Arc::new(Mutex::new(b)))))
     }
 
     pub fn add_models<T>(&mut self, models: T)
     where
         T: IntoIterator<Item=(String, Model)>
     {
-        Self::add_assets(models.into_iter(), &mut self.models);
+        self.models.extend(models.into_iter().map(|(a, b)| (a, Arc::new(RwLock::new(b)))));
     }
 
     pub fn push_texture(&mut self, texture: Texture) -> TextureId
     {
-        self.textures.push(Arc::new(RwLock::new(texture)))
+        self.textures.push(Arc::new(Mutex::new(texture)))
     }
 
     pub fn push_model(&mut self, model: Model) -> ModelId
@@ -422,27 +408,11 @@ impl Assets
         })
     }
 
-    fn add_assets<AddAssetsType, I, T>(
-        add_assets: AddAssetsType,
-        assets: &mut IdsStorage<I, Arc<RwLock<T>>>
-    )
-    where
-        I: From<usize> + Clone,
-        AddAssetsType: Iterator<Item=(String, T)>
-    {
-        let insert_assets = add_assets.map(|(name, asset)|
-        {
-            (name, Arc::new(RwLock::new(asset)))
-        });
-
-        assets.extend(insert_assets);
-    }
-
-	pub fn swap_pipelines(&mut self, resource_uploader: &ResourceUploader)
+	pub fn swap_pipelines(&mut self)
 	{
 		self.textures.iter_mut().for_each(|texture|
 		{
-			texture.write().swap_pipeline(resource_uploader)
+			texture.lock().swap_pipeline()
 		});
 	}
 }

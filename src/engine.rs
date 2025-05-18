@@ -15,9 +15,7 @@ use vulkano::{
 use crate::{
     ObjectFactory,
     AssetsPaths,
-    ShadersQuery,
     Assets,
-    UniformLocation,
     allocators::{UniformAllocator, ObjectAllocator},
     text_factory::FontsContainer,
     game_object::*,
@@ -38,16 +36,13 @@ impl Engine
     pub fn new(
         assets_paths: &AssetsPaths,
         mut resource_uploader: ResourceUploader,
-        device: Arc<Device>,
-        shaders_query: ShadersQuery
+        device: Arc<Device>
     ) -> Self
     {
         let assets = Assets::new(
             &mut resource_uploader,
             assets_paths.textures.as_ref(),
-            assets_paths.models.as_ref(),
-            UniformLocation{set: 0, binding: 0},
-            shaders_query
+            assets_paths.models.as_ref()
         );
 
         let assets = Arc::new(Mutex::new(assets));
@@ -99,8 +94,8 @@ impl Engine
         self.object_create_partial_info(resource_uploader, size, false)
     }
 
-    pub fn swap_pipelines(&mut self, resource_uploader: &ResourceUploader)
+    pub fn swap_pipelines(&mut self)
     {
-        self.assets.lock().swap_pipelines(resource_uploader);
+        self.assets.lock().swap_pipelines();
     }
 }

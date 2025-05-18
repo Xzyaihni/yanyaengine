@@ -7,8 +7,6 @@ use ab_glyph::FontVec;
 use crate::{
     ObjectFactory,
     TextObject,
-    UniformLocation,
-    ShaderId,
     text_object::CharsRasterizer,
     object::resource_uploader::ResourceUploader
 };
@@ -107,8 +105,6 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
 
     pub fn create(
         &mut self,
-        location: UniformLocation,
-        shader: ShaderId,
         info: TextCreateInfo
     ) -> TextObject
     {
@@ -117,9 +113,7 @@ impl<'a, 'b: 'a> TextFactory<'a, 'b>
             &self.object_factory,
             &self.size,
             info,
-            self.fonts_container.default_font(),
-            location,
-            shader
+            self.fonts_container.default_font()
         )
     }
 }

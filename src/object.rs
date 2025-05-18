@@ -5,7 +5,7 @@ use std::{
     sync::Arc
 };
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use vulkano::{
     buffer::{BufferContents, Subbuffer},
@@ -121,7 +121,7 @@ struct ObjectVertex
 pub struct Object
 {
     model: Arc<RwLock<Model>>,
-    texture: Arc<RwLock<Texture>>,
+    texture: Arc<Mutex<Texture>>,
     transform: ObjectTransform,
     subbuffer: Subbuffer<[ObjectVertex]>,
     #[cfg(debug_assertions)]
@@ -133,7 +133,7 @@ impl Object
 {
     pub fn new_default(
         model: Arc<RwLock<Model>>,
-        texture: Arc<RwLock<Texture>>,
+        texture: Arc<Mutex<Texture>>,
         allocator: &ObjectAllocator
     ) -> Self
     {
@@ -144,7 +144,7 @@ impl Object
 
     pub fn new(
         model: Arc<RwLock<Model>>,
-        texture: Arc<RwLock<Texture>>,
+        texture: Arc<Mutex<Texture>>,
         transform: ObjectTransform,
         allocator: &ObjectAllocator
     ) -> Self
@@ -190,17 +190,17 @@ impl Object
         *current_model = model;
     }
 
-    pub fn set_texture(&mut self, texture: Arc<RwLock<Texture>>)
+    pub fn set_texture(&mut self, texture: Arc<Mutex<Texture>>)
     {
         self.texture = texture;
     }
 
     pub fn set_inplace_texture(&mut self, texture: Texture)
     {
-        *self.texture.write() = texture;
+        *self.texture.lock() = texture;
     }
 
-    pub fn texture(&self) -> &Arc<RwLock<Texture>>
+    pub fn texture(&self) -> &Arc<Mutex<Texture>>
     {
         &self.texture
     }
@@ -230,6 +230,8 @@ impl GameObject for Object
             return;
         }
 
+        let descriptor_set = self.texture.lock().descriptor_set(info);
+
         self.assert_updated(&info.object_info);
 
         let size = self.model.read().vertices.len() as u32;
@@ -242,7 +244,7 @@ impl GameObject for Object
                     PipelineBindPoint::Graphics,
                     layout,
                     0,
-                    self.texture.read().descriptor_set()
+                    descriptor_set
                 )
                 .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())

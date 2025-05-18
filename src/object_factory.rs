@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use super::{
     OccludingPlane,
@@ -22,7 +22,7 @@ use crate::{
 pub struct ObjectInfo
 {
     pub model: Arc<RwLock<Model>>,
-    pub texture: Arc<RwLock<Texture>>,
+    pub texture: Arc<Mutex<Texture>>,
     pub transform: Transform
 }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use nalgebra::Vector2;
 
@@ -11,8 +11,6 @@ use crate::{
     ObjectFactory,
     TextInfo,
     ObjectInfo,
-    UniformLocation,
-    ShaderId,
     transform::{TransformContainer, Transform},
     game_object::*,
     object::{
@@ -99,9 +97,7 @@ impl TextObject
         object_factory: &ObjectFactory,
         screen_size: &Vector2<f32>,
         info: TextCreateInfo,
-        font: &CharsRasterizer,
-        location: UniformLocation,
-        shader: ShaderId
+        font: &CharsRasterizer
     ) -> Self
     {
         let font = font.with_font_size(info.inner.font_size);
@@ -128,11 +124,11 @@ impl TextObject
             font.render(&mut image, info);
         });
 
-        let texture = Texture::new(resource_uploader, image.into(), location, shader);
+        let texture = Texture::new(resource_uploader, image.into());
 
         let object = object_factory.create(ObjectInfo{
             model: Arc::new(RwLock::new(Model::square(1.0))),
-            texture: Arc::new(RwLock::new(texture)),
+            texture: Arc::new(Mutex::new(texture)),
             transform: info.transform
         });
 
@@ -198,7 +194,7 @@ impl TextObject
         self.size
     }
 
-    pub fn texture(&self) -> Option<&Arc<RwLock<Texture>>>
+    pub fn texture(&self) -> Option<&Arc<Mutex<Texture>>>
     {
         self.object.as_ref().map(|x| x.texture())
     }

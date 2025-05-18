@@ -1,7 +1,8 @@
 use std::{
     fmt,
     path::Path,
-    sync::Arc
+    sync::Arc,
+    collections::HashMap
 };
 
 use nalgebra::Vector2;
@@ -31,7 +32,7 @@ use image::{
     error::ImageError
 };
 
-use crate::{UniformLocation, ShaderId};
+use crate::{game_object::*, UniformLocation, ShaderId};
 use super::resource_uploader::ResourceUploader;
 
 
@@ -300,37 +301,28 @@ impl fmt::Debug for RgbaImage
     }
 }
 
+type SetId = (ShaderId, UniformLocation);
+
 #[derive(Clone)]
 pub struct Texture
 {
     view: Arc<ImageView>,
-    descriptor_set: Arc<DescriptorSet>,
-    location: UniformLocation,
-    shader: ShaderId
+    descriptor_sets: HashMap<SetId, Arc<DescriptorSet>>
 }
 
 impl Texture
 {
     pub fn new(
         resource_uploader: &mut ResourceUploader,
-        image: RgbaImage,
-        location: UniformLocation,
-        shader: ShaderId
+        image: RgbaImage
     ) -> Self
     {
-        let view = Self::calculate_descriptor_set(resource_uploader, &image);
+        let view = Self::calculate_image_view(resource_uploader, &image);
 
-        let descriptor_set = Self::calculate_persistent_set(
-            view.clone(),
-            resource_uploader,
-            location,
-            shader
-        );
-
-        Self{view, descriptor_set, location, shader}
+        Self{view, descriptor_sets: HashMap::new()}
     }
 
-    fn calculate_descriptor_set(
+    fn calculate_image_view(
         resource_uploader: &mut ResourceUploader,
         image: &RgbaImage
     ) -> Arc<ImageView>
@@ -392,17 +384,12 @@ impl Texture
         size / max_size
     }
 
-    pub fn swap_pipeline(&mut self, resource_uploader: &ResourceUploader)
+    pub fn swap_pipeline(&mut self)
     {
-        self.descriptor_set = Self::calculate_persistent_set(
-            self.view.clone(),
-            resource_uploader,
-            self.location,
-            self.shader
-        );
+        self.descriptor_sets.clear();
     }
 
-    fn calculate_persistent_set(
+    fn calculate_descriptor_set(
         view: Arc<ImageView>,
         resource_uploader: &ResourceUploader,
         location: UniformLocation,
@@ -426,9 +413,22 @@ impl Texture
         ).unwrap()
     }
 
-    pub fn descriptor_set(&self) -> Arc<DescriptorSet>
+    pub fn descriptor_set(&mut self, info: &DrawInfo) -> Arc<DescriptorSet>
     {
-        self.descriptor_set.clone()
+        let current = (
+            info.current_pipeline_id().unwrap(),
+            UniformLocation{set: 0, binding: 0}
+        );
+
+        self.descriptor_sets.entry(current).or_insert_with(||
+        {
+            Self::calculate_descriptor_set(
+                self.view.clone(),
+                info.object_info.builder_wrapper.resource_uploader(),
+                current.1,
+                current.0
+            )
+        }).clone()
     }
 }
 
