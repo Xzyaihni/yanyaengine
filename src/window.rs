@@ -136,6 +136,7 @@ pub struct PipelineCreateInfo
     pub layout: Arc<PipelineLayout>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>,
+    pub blend: Option<AttachmentBlend>,
     pub subpass: u32
 }
 
@@ -403,7 +404,7 @@ impl<T: Clone> RenderInfo<T>
                 color_blend_state: Some(ColorBlendState::with_attachment_states(
                     subpass.num_color_attachments(),
                     ColorBlendAttachmentState{
-                        blend: Some(AttachmentBlend::alpha()),
+                        blend: shader.blend.clone(),
                         ..Default::default()
                     }
                 )),
@@ -644,6 +645,7 @@ impl<T: Clone> InfoInit<T>
                 layout,
                 depth: shader_item.depth,
                 stencil: shader_item.stencil,
+                blend: shader_item.blend,
                 subpass: shader_item.subpass
             }
         }).collect();

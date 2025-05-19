@@ -14,6 +14,7 @@ use vulkano::{
     pipeline::{
         PipelineShaderStageCreateInfo,
         graphics::{
+            color_blend::AttachmentBlend,
             vertex_input::{VertexBufferDescription, Vertex},
             depth_stencil::{DepthState, StencilState}
         }
@@ -258,6 +259,7 @@ pub struct Shader
     pub per_vertex: Option<VertexBufferDescription>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>,
+    pub blend: Option<AttachmentBlend>,
     pub subpass: u32
 }
 
@@ -273,6 +275,7 @@ impl Default for Shader
             per_vertex: None,
             depth: None,
             stencil: None,
+            blend: Some(AttachmentBlend::alpha()),
             subpass: 0
         }
     }
