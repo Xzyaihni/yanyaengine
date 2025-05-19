@@ -3,7 +3,7 @@ use std::{fmt, cell::RefCell};
 
 use vulkano::{
     buffer::Subbuffer,
-    pipeline::graphics::vertex_input::{VertexBufferDescription, Vertex}
+    pipeline::{PipelineBindPoint, graphics::vertex_input::{VertexBufferDescription, Vertex}}
 };
 
 use nalgebra::{Vector3, Vector4, Matrix4};
@@ -152,8 +152,17 @@ impl OccludingPlane
 
         let square_vertices = Model::square(1.0).vertices.len() as u32;
 
+        let layout = info.current_layout();
+
         unsafe{
             info.object_info.builder_wrapper.builder()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
+                    layout,
+                    0,
+                    info.current_sets.clone()
+                )
+                .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())
                 .unwrap()
                 .draw(square_vertices, 1, 0, 0)

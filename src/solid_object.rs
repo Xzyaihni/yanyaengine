@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 
 use vulkano::{
     buffer::Subbuffer,
-    pipeline::graphics::vertex_input::Vertex
+    pipeline::{PipelineBindPoint, graphics::vertex_input::Vertex}
 };
 
 use nalgebra::{Vector3, Vector4, Matrix4};
@@ -122,8 +122,17 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> GameObject fo
 
         let size = self.model.read().vertices.len() as u32;
 
+        let layout = info.current_layout();
+
         unsafe{
             info.object_info.builder_wrapper.builder()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
+                    layout,
+                    0,
+                    info.current_sets.clone()
+                )
+                .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())
                 .unwrap()
                 .draw(size, 1, 0, 0)

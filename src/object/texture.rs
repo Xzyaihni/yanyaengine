@@ -389,30 +389,6 @@ impl Texture
         self.descriptor_sets.clear();
     }
 
-    fn calculate_descriptor_set(
-        view: Arc<ImageView>,
-        resource_uploader: &ResourceUploader,
-        location: UniformLocation,
-        shader: ShaderId
-    ) -> Arc<DescriptorSet>
-    {
-        let info = &resource_uploader.pipeline_infos[shader.get_raw()];
-        let descriptor_layout = info.layout.set_layouts().get(location.set as usize)
-            .unwrap()
-            .clone();
-
-        DescriptorSet::new(
-            resource_uploader.descriptor_allocator.clone(),
-            descriptor_layout,
-            [
-                WriteDescriptorSet::image_view_sampler(
-                    location.binding, view, resource_uploader.sampler.clone()
-                )
-            ],
-            []
-        ).unwrap()
-    }
-
     pub fn descriptor_set(&mut self, info: &DrawInfo) -> Arc<DescriptorSet>
     {
         let current = (
@@ -422,11 +398,14 @@ impl Texture
 
         self.descriptor_sets.entry(current).or_insert_with(||
         {
-            Self::calculate_descriptor_set(
-                self.view.clone(),
-                info.object_info.builder_wrapper.resource_uploader(),
-                current.1,
-                current.0
+            let resource_uploader = info.object_info.builder_wrapper.resource_uploader();
+            info.create_descriptor_set(
+                current.1.set as usize,
+                [
+                    WriteDescriptorSet::image_view_sampler(
+                        current.1.binding, self.view.clone(), resource_uploader.sampler.clone()
+                    )
+                ]
             )
         }).clone()
     }

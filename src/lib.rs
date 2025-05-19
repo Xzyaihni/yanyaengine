@@ -257,7 +257,8 @@ pub struct Shader
     pub shader: ShadersGroup<WrapperShaderFn>,
     pub per_vertex: Option<VertexBufferDescription>,
     pub depth: Option<DepthState>,
-    pub stencil: Option<StencilState>
+    pub stencil: Option<StencilState>,
+    pub subpass: u32
 }
 
 impl Default for Shader
@@ -271,7 +272,8 @@ impl Default for Shader
             ),
             per_vertex: None,
             depth: None,
-            stencil: None
+            stencil: None,
+            subpass: 0
         }
     }
 }

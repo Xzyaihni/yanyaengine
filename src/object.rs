@@ -246,13 +246,16 @@ impl GameObject for Object
 
         let layout = info.current_layout();
 
+        let mut sets = info.current_sets.clone();
+        sets.push(descriptor_set);
+
         unsafe{
             info.object_info.builder_wrapper.builder()
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
                     layout,
                     0,
-                    descriptor_set
+                    sets
                 )
                 .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())

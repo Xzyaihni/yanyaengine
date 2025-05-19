@@ -1,6 +1,8 @@
 use std::{
+    error::Error,
     time::Instant,
-    sync::Arc
+    sync::Arc,
+    collections::{HashSet, HashMap}
 };
 
 use vulkano::{
@@ -133,7 +135,8 @@ pub struct PipelineCreateInfo
     pub shaders: ShadersGroup<EntryPoint>,
     pub layout: Arc<PipelineLayout>,
     pub depth: Option<DepthState>,
-    pub stencil: Option<StencilState>
+    pub stencil: Option<StencilState>,
+    pub subpass: u32
 }
 
 pub type AttachmentCreator<T> = Box<dyn Fn(T, Arc<StandardMemoryAllocator>, Arc<ImageView>) -> Vec<Arc<ImageView>>>;
@@ -208,12 +211,19 @@ impl Rendering<()>
     }
 }
 
+#[derive(Clone)]
+struct FramebufferInfo
+{
+    framebuffer: Arc<Framebuffer>,
+    attachments: Vec<Arc<ImageView>>
+}
+
 // just put everything in 1 place who cares lmao
 struct RenderInfo<T>
 {
     pub device: Arc<Device>,
     pub swapchain: Arc<Swapchain>,
-    pub framebuffers: Box<[Arc<Framebuffer>]>,
+    pub framebuffers: Box<[FramebufferInfo]>,
     pub pipelines: Vec<PipelineInfo>,
     pub viewport: Viewport,
     pub surface: Arc<Surface>,
@@ -325,21 +335,24 @@ impl<T: Clone> RenderInfo<T>
         render_pass: Arc<RenderPass>,
         setup: &T,
         attachments: &AttachmentCreator<T>
-    ) -> Box<[Arc<Framebuffer>]>
+    ) -> Box<[FramebufferInfo]>
     {
         images.map(|image|
         {
             let view = ImageView::new_default(image).unwrap();
 
-            let attachments = attachments(setup.clone(), memory_allocator.clone(), view);
+            let attachments = attachments(setup.clone(), memory_allocator.clone(), view.clone());
 
-            Framebuffer::new(
-                render_pass.clone(),
-                FramebufferCreateInfo{
-                    attachments,
-                    ..Default::default()
-                }
-            ).unwrap()
+            FramebufferInfo{
+                framebuffer: Framebuffer::new(
+                    render_pass.clone(),
+                    FramebufferCreateInfo{
+                        attachments: attachments.clone(),
+                        ..Default::default()
+                    }
+                ).unwrap(),
+                attachments
+            }
         }).collect()
     }
 
@@ -348,10 +361,22 @@ impl<T: Clone> RenderInfo<T>
         viewport: Viewport,
         subpass: Subpass,
         device: Arc<Device>
-    ) -> PipelineInfo
+    ) -> Result<PipelineInfo, Validated<VulkanError>>
     {
         let mut dynamic_state = foldhash::HashSet::default();
         dynamic_state.insert(DynamicState::Scissor);
+
+        let depth_stencil_state = if shader.depth.is_none() && shader.stencil.is_none()
+        {
+            None
+        } else
+        {
+            Some(DepthStencilState{
+                depth: shader.depth,
+                stencil: shader.stencil.clone(),
+                ..Default::default()
+            })
+        };
 
         let pipeline = GraphicsPipeline::new(
             device,
@@ -382,18 +407,14 @@ impl<T: Clone> RenderInfo<T>
                         ..Default::default()
                     }
                 )),
-                depth_stencil_state: Some(DepthStencilState{
-                    depth: shader.depth,
-                    stencil: shader.stencil.clone(),
-                    ..Default::default()
-                }),
+                depth_stencil_state,
                 dynamic_state,
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(shader.layout.clone())
             }
-        ).unwrap();
+        )?;
 
-        pipeline.into()
+        Ok(pipeline.into())
     }
 
     fn generate_pipelines(
@@ -403,16 +424,24 @@ impl<T: Clone> RenderInfo<T>
         pipeline_infos: &[PipelineCreateInfo]
     ) -> Vec<PipelineInfo>
     {
-        let subpass = Subpass::from(render_pass, 0).unwrap();
+        let subpasses: HashSet<u32> = pipeline_infos.iter().map(|x| x.subpass).collect();
+        let subpasses: HashMap<u32, Subpass> = subpasses.into_iter().map(|index|
+        {
+            (index, Subpass::from(render_pass.clone(), index).unwrap())
+        }).collect();
 
         pipeline_infos.iter().map(|shader|
         {
             Self::generate_pipeline(
                 shader,
                 viewport.clone(),
-                subpass.clone(),
+                subpasses[&shader.subpass].clone(),
                 device.clone()
-            )
+            ).unwrap_or_else(|err|
+            {
+                if let Some(source) = err.source() { eprintln!("{source}") }
+                panic!("{err} (on subpass {})", shader.subpass)
+            })
         }).collect()
     }
 
@@ -614,7 +643,8 @@ impl<T: Clone> InfoInit<T>
                 per_vertex,
                 layout,
                 depth: shader_item.depth,
-                stencil: shader_item.stencil
+                stencil: shader_item.stencil,
+                subpass: shader_item.subpass
             }
         }).collect();
 
@@ -1065,13 +1095,12 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
         user_app.update(object_create_info, delta_time);
     }
 
+    let framebuffer_info = &frame_info.render_info.framebuffers[frame_info.image_index];
     frame_info.builder
         .begin_render_pass(
             RenderPassBeginInfo{
                 clear_values: frame_info.render_info.clear_values.clone(),
-                ..RenderPassBeginInfo::framebuffer(
-                    frame_info.render_info.framebuffers[frame_info.image_index].clone()
-                )
+                ..RenderPassBeginInfo::framebuffer(framebuffer_info.framebuffer.clone())
             },
             SubpassBeginInfo{
                 contents: SubpassContents::Inline,
@@ -1090,7 +1119,8 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
 
         let draw_info = DrawInfo::new(
             object_create_info,
-            &frame_info.render_info.pipelines
+            &frame_info.render_info.pipelines,
+            &framebuffer_info.attachments
         );
 
         user_app.draw(draw_info);

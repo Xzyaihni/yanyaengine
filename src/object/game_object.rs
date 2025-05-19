@@ -8,13 +8,14 @@ use nalgebra::Matrix4;
 use parking_lot::Mutex;
 
 use vulkano::{
+    image::view::ImageView,
     pipeline::{PipelineBindPoint, PipelineLayout, graphics::viewport::Scissor},
-    descriptor_set::WriteDescriptorSet,
+    descriptor_set::{WriteDescriptorSet, DescriptorSet},
     buffer::{
         Subbuffer,
         BufferContents
     },
-    command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer},
+    command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer, SubpassEndInfo, SubpassBeginInfo}
 };
 
 use crate::{
@@ -23,6 +24,7 @@ use crate::{
     UniformLocation,
     ShaderId,
     PipelineInfo,
+    ResourceUploader,
     allocators::UniformAllocator,
     camera::Camera
 };
@@ -82,6 +84,8 @@ pub type InitInfo<'a> = ObjectCreateInfo<'a>;
 pub struct DrawInfo<'a>
 {
     pub object_info: ObjectCreatePartialInfo<'a>,
+    pub current_sets: Vec<Arc<DescriptorSet>>,
+    pub attachments: &'a [Arc<ImageView>],
     current_pipeline: Option<usize>,
     pipelines: &'a [PipelineInfo]
 }
@@ -90,11 +94,14 @@ impl<'a> DrawInfo<'a>
 {
     pub fn new(
         object_info: ObjectCreatePartialInfo<'a>,
-        pipelines: &'a [PipelineInfo]
+        pipelines: &'a [PipelineInfo],
+        attachments: &'a [Arc<ImageView>]
     ) -> Self
     {
         Self{
             object_info,
+            current_sets: Vec::new(),
+            attachments,
             current_pipeline: None,
             pipelines
         }
@@ -123,6 +130,13 @@ impl<'a> DrawInfo<'a>
     pub fn current_layout(&self) -> Arc<PipelineLayout>
     {
         self.current_pipeline().layout.clone()
+    }
+
+    pub fn next_subpass(&mut self)
+    {
+        self.object_info.builder_wrapper.builder()
+            .next_subpass(SubpassEndInfo::default(), SubpassBeginInfo::default())
+            .unwrap();
     }
 
     #[allow(dead_code)]
@@ -183,6 +197,34 @@ impl<'a> DrawInfo<'a>
         self.object_info.builder_wrapper.builder()
             .set_scissor(0, vec![Scissor::default()].into())
             .unwrap();
+    }
+
+    pub fn resource_uploader(&self) -> &ResourceUploader
+    {
+        self.object_info.builder_wrapper.resource_uploader()
+    }
+
+    pub fn create_descriptor_set(
+        &self,
+        set: usize,
+        writes: impl IntoIterator<Item=WriteDescriptorSet>
+    ) -> Arc<DescriptorSet>
+    {
+        let resource_uploader = self.resource_uploader();
+
+        let shader = self.current_pipeline_id().unwrap();
+
+        let info = &resource_uploader.pipeline_infos[shader.get_raw()];
+        let descriptor_layout = info.layout.set_layouts().get(set)
+            .unwrap()
+            .clone();
+
+        DescriptorSet::new(
+            resource_uploader.descriptor_allocator.clone(),
+            descriptor_layout,
+            writes,
+            []
+        ).unwrap()
     }
 }
 
