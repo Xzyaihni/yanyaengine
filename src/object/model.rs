@@ -20,10 +20,10 @@ pub struct ParseError
 #[derive(Debug)]
 pub enum ParseErrorKind
 {
-    
+
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, EnumIter, bincode::Decode, bincode::Encode)]
 pub enum Uvs
 {
     Normal,
