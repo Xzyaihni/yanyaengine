@@ -18,7 +18,7 @@ use crate::{
     object::{
         resource_uploader::ResourceUploader,
         model::Model,
-        texture::{SimpleImage, RgbaImage, Texture}
+        texture::{Color, SimpleImage, RgbaImage, Texture}
     }
 };
 
@@ -27,6 +27,12 @@ use crate::{
 pub enum DefaultModel
 {
     Square
+}
+
+#[derive(EnumIter, IntoStaticStr)]
+pub enum DefaultTexture
+{
+    Solid
 }
 
 pub struct NamedValue<T>
@@ -209,9 +215,9 @@ impl<I, T> IdsStorage<I, T>
         id
     }
 
-    pub fn get_id(&self, name: &str) -> &I
+    pub fn get_id(&self, name: &str) -> Option<&I>
     {
-        self.ids.get(name).unwrap_or_else(|| panic!("asset named `{name}` doesnt exist"))
+        self.ids.get(name)
     }
 
     pub fn keys(&self) -> impl Iterator<Item=&String>
@@ -266,7 +272,7 @@ impl Assets
         ModelsPath: AsRef<Path>
     {
         let output_textures_path = textures_path.as_ref().map(|x| x.as_ref().to_owned());
-        let textures = Self::load_resource(textures_path, |path|
+        let mut textures = Self::load_resource(textures_path, |path|
         {
             FilesLoader::load_images(path).map(|named_value|
             {
@@ -276,6 +282,8 @@ impl Assets
                 })
             })
         }, |x| Arc::new(Mutex::new(x)));
+
+        textures.extend(Self::create_default_textures(resource_uploader));
 
         let mut models = Self::load_resource(models_path, |path|
         {
@@ -316,17 +324,37 @@ impl Assets
 
     pub fn default_model(&self, id: DefaultModel) -> ModelId
     {
-        self.model_id(id.into())
+        self.try_model_id(id.into()).unwrap()
+    }
+
+    pub fn default_texture(&self, id: DefaultTexture) -> TextureId
+    {
+        self.try_texture_id(id.into()).unwrap()
+    }
+
+    pub fn try_texture_id(&self, name: &str) -> Option<TextureId>
+    {
+        self.textures.get_id(name).copied()
     }
 
     pub fn texture_id(&self, name: &str) -> TextureId
     {
-        *self.textures.get_id(name)
+        self.try_texture_id(name).unwrap_or_else(||
+        {
+            eprintln!("texture named `{name}` doesnt exist, using fallback");
+
+            self.default_texture(DefaultTexture::Solid)
+        })
+    }
+
+    pub fn try_texture_by_name(&self, name: &str) -> Option<&Arc<Mutex<Texture>>>
+    {
+        Some(&self.textures[self.try_texture_id(name)?])
     }
 
     pub fn texture_by_name(&self, name: &str) -> &Arc<Mutex<Texture>>
     {
-        &self.textures[*self.textures.get_id(name)]
+        &self.textures[self.texture_id(name)]
     }
 
     pub fn texture(&self, id: TextureId) -> &Arc<Mutex<Texture>>
@@ -334,14 +362,29 @@ impl Assets
         &self.textures[id]
     }
 
+    pub fn try_model_id(&self, name: &str) -> Option<ModelId>
+    {
+        self.models.get_id(name).copied()
+    }
+
     pub fn model_id(&self, name: &str) -> ModelId
     {
-        *self.models.get_id(name)
+        self.try_model_id(name).unwrap_or_else(||
+        {
+            eprintln!("model named `{name}` doesnt exist, using fallback");
+
+            self.default_model(DefaultModel::Square)
+        })
+    }
+
+    pub fn try_model_by_name(&self, name: &str) -> Option<&Arc<RwLock<Model>>>
+    {
+        Some(&self.models[self.try_model_id(name)?])
     }
 
     pub fn model_by_name(&self, name: &str) -> &Arc<RwLock<Model>>
     {
-        &self.models[*self.models.get_id(name)]
+        &self.models[self.model_id(name)]
     }
 
     pub fn model(&self, id: ModelId) -> &Arc<RwLock<Model>>
@@ -389,6 +432,28 @@ impl Assets
     pub fn push_model(&mut self, model: Model) -> ModelId
     {
         self.models.push(Arc::new(RwLock::new(model)))
+    }
+
+    fn create_default_textures<'a, 'b>(
+        resource_uploader: &'a mut ResourceUploader<'b>
+    ) -> impl Iterator<Item=(String, Arc<Mutex<Texture>>)> + use<'a, 'b>
+    {
+        DefaultTexture::iter().map(|default_texture|
+        {
+            let texture = match default_texture
+            {
+                DefaultTexture::Solid =>
+                {
+                    Texture::new(
+                        resource_uploader,
+                        SimpleImage::filled(Color{r: 255, g: 255, b: 255, a: 255}, 1, 1).into()
+                    )
+                }
+            };
+
+            let name: &str = default_texture.into();
+            (name.to_owned(), Arc::new(Mutex::new(texture)))
+        })
     }
 
     fn create_default_models() -> impl Iterator<Item=(String, Arc<RwLock<Model>>)>
