@@ -920,7 +920,8 @@ impl<UserApp: YanyaApp + 'static, T: Clone> ApplicationHandler for WindowEventHa
                 let control = Control::Keyboard{
                     logical: event.logical_key,
                     keycode: event.physical_key,
-                    state: event.state
+                    state: event.state,
+                    repeat: event.repeat
                 };
 
                 if let Some(app) = self.info_mut().user_app.as_mut()

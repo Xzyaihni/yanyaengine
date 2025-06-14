@@ -191,7 +191,7 @@ impl Display for KeyCodeNamed
 #[derive(Debug, Clone)]
 pub enum Control
 {
-    Keyboard{logical: Key, keycode: PhysicalKey, state: ElementState},
+    Keyboard{logical: Key, keycode: PhysicalKey, state: ElementState, repeat: bool},
     Mouse{button: MouseButton, state: ElementState},
     Scroll{x: f64, y: f64}
 }
