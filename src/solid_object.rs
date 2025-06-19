@@ -29,7 +29,7 @@ pub struct SolidObject<VertexType=SimpleVertex>
     transform: ObjectTransform,
     subbuffer: Subbuffer<[VertexType]>,
     #[cfg(debug_assertions)]
-    updated_buffers: bool
+    updated_buffers: Option<bool>
 }
 
 impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> NormalGraphicalObject<VertexType> for SolidObject<VertexType>
@@ -73,7 +73,7 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])>> SolidObject<VertexType>
             transform,
             subbuffer,
             #[cfg(debug_assertions)]
-            updated_buffers: false
+            updated_buffers: None
         }
     }
 

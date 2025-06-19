@@ -74,7 +74,7 @@ macro_rules! impl_updated_check
         {
             #[cfg(debug_assertions)]
             {
-                self.updated_buffers = object_info.frame_parity;
+                self.updated_buffers = Some(object_info.frame_parity);
             }
         }
 
@@ -84,7 +84,7 @@ macro_rules! impl_updated_check
             #[cfg(debug_assertions)]
             {
                 assert!(
-                    self.updated_buffers == object_info.frame_parity,
+                    self.updated_buffers == Some(object_info.frame_parity),
                     "update_buffers wasnt called on {self:#?}"
                 );
             }
@@ -133,7 +133,7 @@ pub struct Object
     transform: ObjectTransform,
     subbuffer: Subbuffer<[ObjectVertex]>,
     #[cfg(debug_assertions)]
-    updated_buffers: bool
+    updated_buffers: Option<bool>
 }
 
 #[allow(dead_code)]
@@ -165,7 +165,7 @@ impl Object
             transform,
             subbuffer,
             #[cfg(debug_assertions)]
-            updated_buffers: false
+            updated_buffers: None
         }
     }
 

@@ -23,7 +23,7 @@ pub struct OccludingPlane
     transform: ObjectTransform,
     subbuffer: Subbuffer<[SimpleVertex]>,
     #[cfg(debug_assertions)]
-    updated_buffers: bool
+    updated_buffers: Option<bool>
 }
 
 #[allow(dead_code)]
@@ -49,7 +49,7 @@ impl OccludingPlane
             transform,
             subbuffer,
             #[cfg(debug_assertions)]
-            updated_buffers: false
+            updated_buffers: None
         }
     }
 
