@@ -82,8 +82,6 @@ pub mod text_object;
 mod window;
 
 
-pub const WINDING_MATTERS: bool = false;
-
 mod default_vertex
 {
     vulkano_shaders::shader!

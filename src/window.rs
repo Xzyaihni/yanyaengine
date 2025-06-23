@@ -394,7 +394,7 @@ impl<T: Clone> RenderInfo<T>
                     ..Default::default()
                 }),
                 rasterization_state: Some(RasterizationState{
-                    cull_mode: CullMode::None,
+                    cull_mode: CullMode::Back,
                     ..Default::default()
                 }),
                 multisample_state: Some(MultisampleState{

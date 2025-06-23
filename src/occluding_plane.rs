@@ -9,7 +9,6 @@ use vulkano::{
 use nalgebra::{Vector3, Vector4, Matrix4};
 
 use crate::{
-    WINDING_MATTERS,
     game_object::*,
     SimpleVertex,
     object::{impl_updated_check, Model, ObjectTransform},
@@ -22,6 +21,7 @@ pub struct OccludingPlane
 {
     transform: ObjectTransform,
     subbuffer: Subbuffer<[SimpleVertex]>,
+    reverse_winding: bool,
     #[cfg(debug_assertions)]
     updated_buffers: Option<bool>
 }
@@ -35,11 +35,12 @@ impl OccludingPlane
     {
         let transform = ObjectTransform::new_default();
 
-        Self::new(transform, allocator)
+        Self::new(transform, false, allocator)
     }
 
     pub fn new(
         transform: ObjectTransform,
+        reverse_winding: bool,
         allocator: &ObjectAllocator
     ) -> Self
     {
@@ -48,6 +49,7 @@ impl OccludingPlane
         Self{
             transform,
             subbuffer,
+            reverse_winding,
             #[cfg(debug_assertions)]
             updated_buffers: None
         }
@@ -88,22 +90,7 @@ impl OccludingPlane
             top_right.z = z;
         }
 
-        let winding = {
-            let un_top_left = un_bottom_left.xyz() + un_bottom_left.xyz() - origin;
-            let top_left = (projection_view * with_w(un_top_left, 1.0)).xy();
-
-            let bottom_left = bottom_left.xy();
-            let bottom_right = bottom_right.xy();
-
-            let i0 = bottom_right - bottom_left;
-            let i1 = top_left - bottom_left;
-
-            i0.x * i1.y - i0.y * i1.x
-        };
-
-        let clockwise = WINDING_MATTERS && winding > 0.0;
-
-        let vertices = if clockwise
+        let vertices = if !self.reverse_winding
         {
             vec![
                 bottom_left,

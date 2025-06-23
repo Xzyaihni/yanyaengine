@@ -66,10 +66,10 @@ impl ObjectFactory
         )
     }
 
-    pub fn create_occluding(&self, transform: Transform) -> OccludingPlane
+    pub fn create_occluding(&self, transform: Transform, reverse_winding: bool) -> OccludingPlane
     {
 		let object_transform = ObjectTransform::new_transformed(transform);
 
-        OccludingPlane::new(object_transform, &self.allocator)
+        OccludingPlane::new(object_transform, reverse_winding, &self.allocator)
     }
 }
