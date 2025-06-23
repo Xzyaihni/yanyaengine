@@ -15,6 +15,7 @@ use vulkano::{
         PipelineShaderStageCreateInfo,
         graphics::{
             color_blend::AttachmentBlend,
+            rasterization::CullMode,
             vertex_input::{VertexBufferDescription, Vertex},
             depth_stencil::{DepthState, StencilState}
         }
@@ -257,6 +258,7 @@ pub struct Shader
     pub per_vertex: Option<VertexBufferDescription>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>,
+    pub cull: CullMode,
     pub blend: Option<AttachmentBlend>,
     pub subpass: u32
 }
@@ -273,6 +275,7 @@ impl Default for Shader
             per_vertex: None,
             depth: None,
             stencil: None,
+            cull: CullMode::Back,
             blend: Some(AttachmentBlend::alpha()),
             subpass: 0
         }

@@ -21,6 +21,7 @@ pub struct OccludingPlane
 {
     transform: ObjectTransform,
     subbuffer: Subbuffer<[SimpleVertex]>,
+    is_clockwise: bool,
     reverse_winding: bool,
     #[cfg(debug_assertions)]
     updated_buffers: Option<bool>
@@ -49,6 +50,7 @@ impl OccludingPlane
         Self{
             transform,
             subbuffer,
+            is_clockwise: false,
             reverse_winding,
             #[cfg(debug_assertions)]
             updated_buffers: None
@@ -59,7 +61,7 @@ impl OccludingPlane
         &self,
         origin: Vector3<f32>,
         projection_view: Matrix4<f32>
-    ) -> Box<[SimpleVertex]>
+    ) -> (Box<[SimpleVertex]>, bool)
     {
         let transform = self.transform.matrix();
 
@@ -112,10 +114,33 @@ impl OccludingPlane
             ]
         };
 
-        vertices.iter().map(move |&vertex|
+        let is_clockwise = {
+            let un_top_left = un_bottom_left.xyz() + un_bottom_left.xyz() - origin;
+            let top_left = (projection_view * with_w(un_top_left, 1.0)).xy();
+
+            let bottom_left = bottom_left.xy();
+            let bottom_right = bottom_right.xy();
+
+            let i0 = bottom_right - bottom_left;
+            let i1 = top_left - bottom_left;
+
+            (i0.x * i1.y) > (i0.y * i1.x)
+        };
+
+        (vertices.iter().map(move |&vertex|
         {
             SimpleVertex{position: vertex.into()}
-        }).collect::<Box<[_]>>()
+        }).collect::<Box<[_]>>(), is_clockwise)
+    }
+
+    pub fn is_clockwise(&self) -> bool
+    {
+        self.is_clockwise
+    }
+
+    pub fn reverse_winding(&self) -> bool
+    {
+        self.reverse_winding
     }
 
     pub fn update_buffers(
@@ -126,10 +151,13 @@ impl OccludingPlane
     {
         self.set_updated(&info.partial);
 
+        let (vertices, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
+        self.is_clockwise = is_clockwise;
+
         info.partial.builder_wrapper.builder()
             .update_buffer(
                 self.subbuffer.clone(),
-                self.calculate_vertices(origin, info.projection_view)
+                vertices
             ).unwrap();
     }
 

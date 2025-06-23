@@ -136,6 +136,7 @@ pub struct PipelineCreateInfo
     pub layout: Arc<PipelineLayout>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>,
+    pub cull: CullMode,
     pub blend: Option<AttachmentBlend>,
     pub subpass: u32
 }
@@ -394,7 +395,7 @@ impl<T: Clone> RenderInfo<T>
                     ..Default::default()
                 }),
                 rasterization_state: Some(RasterizationState{
-                    cull_mode: CullMode::Back,
+                    cull_mode: shader.cull,
                     ..Default::default()
                 }),
                 multisample_state: Some(MultisampleState{
@@ -645,6 +646,7 @@ impl<T: Clone> InfoInit<T>
                 layout,
                 depth: shader_item.depth,
                 stencil: shader_item.stencil,
+                cull: shader_item.cull,
                 blend: shader_item.blend,
                 subpass: shader_item.subpass
             }
