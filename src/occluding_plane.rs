@@ -154,6 +154,11 @@ impl OccludingPlane
         let (vertices, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
         self.is_clockwise = is_clockwise;
 
+        if !(self.is_clockwise() ^ self.reverse_winding())
+        {
+            return;
+        }
+
         info.partial.builder_wrapper.builder()
             .update_buffer(
                 self.subbuffer.clone(),
@@ -164,6 +169,11 @@ impl OccludingPlane
     pub fn draw(&self, info: &mut DrawInfo)
     {
         self.assert_updated(&info.object_info);
+
+        if !(self.is_clockwise() ^ self.reverse_winding())
+        {
+            return;
+        }
 
         let square_vertices = Model::square(1.0).vertices.len() as u32;
 
