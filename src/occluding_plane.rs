@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use std::{fmt, cell::RefCell};
 
+
 use vulkano::{
     buffer::Subbuffer,
     pipeline::{PipelineBindPoint, graphics::vertex_input::{VertexBufferDescription, Vertex}}
@@ -94,7 +95,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
         let vertices = if !self.reverse_winding
         {
-            vec![
+            [
                 bottom_left,
                 top_left,
                 bottom_right,
@@ -104,7 +105,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             ]
         } else
         {
-            vec![
+            [
                 top_right,
                 top_left,
                 bottom_right,
@@ -127,7 +128,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             (i0.x * i1.y) > (i0.y * i1.x)
         };
 
-        (vertices.iter().map(move |&vertex|
+        (vertices.into_iter().map(move |vertex|
         {
             VertexType::from(vertex.into())
         }).collect::<Box<[_]>>(), is_clockwise)
@@ -199,7 +200,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
     pub fn per_vertex() -> VertexBufferDescription
     {
-        SimpleVertex::per_vertex()
+        VertexType::per_vertex()
     }
 }
 
