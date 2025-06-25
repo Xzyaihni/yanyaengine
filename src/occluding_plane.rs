@@ -1,13 +1,12 @@
 #[allow(unused_imports)]
 use std::{fmt, cell::RefCell};
 
-
 use vulkano::{
     buffer::Subbuffer,
     pipeline::{PipelineBindPoint, graphics::vertex_input::{VertexBufferDescription, Vertex}}
 };
 
-use nalgebra::{Vector3, Vector4, Matrix4};
+use nalgebra::{Vector2, Vector3, Vector4, Matrix4};
 
 use crate::{
     game_object::*,
@@ -18,10 +17,20 @@ use crate::{
 };
 
 
+#[derive(Debug, Clone, Copy)]
+pub struct OccluderPoints
+{
+    pub bottom_left: Vector2<f32>,
+    pub bottom_right: Vector2<f32>,
+    pub top_left: Vector2<f32>,
+    pub top_right: Vector2<f32>
+}
+
 pub struct OccludingPlane<VertexType=SimpleVertex>
 {
     transform: ObjectTransform,
     subbuffer: Subbuffer<[VertexType]>,
+    points: Option<OccluderPoints>,
     is_back: bool,
     reverse_winding: bool,
     #[cfg(debug_assertions)]
@@ -51,6 +60,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         Self{
             transform,
             subbuffer,
+            points: None,
             is_back: false,
             reverse_winding,
             #[cfg(debug_assertions)]
@@ -62,7 +72,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         &self,
         origin: Vector3<f32>,
         projection_view: Matrix4<f32>
-    ) -> (Box<[VertexType]>, bool)
+    ) -> (Box<[VertexType]>, OccluderPoints, bool)
     {
         let transform = self.transform.matrix();
 
@@ -128,10 +138,17 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             (i0.x * i1.y) > (i0.y * i1.x)
         };
 
+        let points = OccluderPoints{
+            bottom_left: un_bottom_left.xy(),
+            bottom_right: un_bottom_right.xy(),
+            top_left: un_top_left.xy(),
+            top_right: un_top_right.xy()
+        };
+
         (vertices.into_iter().map(move |vertex|
         {
             VertexType::from(vertex.into())
-        }).collect::<Box<[_]>>(), is_clockwise)
+        }).collect::<Box<[_]>>(), points, is_clockwise)
     }
 
     pub fn is_back(&self) -> bool
@@ -144,6 +161,11 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         self.reverse_winding
     }
 
+    pub fn points(&self) -> &Option<OccluderPoints>
+    {
+        &self.points
+    }
+
     pub fn update_buffers(
         &mut self,
         origin: Vector3<f32>,
@@ -152,13 +174,16 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
     {
         self.set_updated(&info.partial);
 
-        let (vertices, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
+        let (vertices, points, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
         self.is_back = !(is_clockwise ^ self.reverse_winding);
 
         if self.is_back
         {
+            self.points = None;
             return;
         }
+
+        self.points = Some(points);
 
         info.partial.builder_wrapper.builder()
             .update_buffer(

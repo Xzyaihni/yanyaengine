@@ -40,7 +40,7 @@ pub use object::{
 
 pub use solid_object::SolidObject;
 
-pub use occluding_plane::OccludingPlane;
+pub use occluding_plane::{OccluderPoints, OccludingPlane};
 
 pub use text_object::TextObject;
 pub use text_factory::{TextInfo, TextCreateInfo, FontsContainer};
