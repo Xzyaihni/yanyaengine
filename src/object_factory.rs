@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use parking_lot::{RwLock, Mutex};
 
@@ -66,7 +66,11 @@ impl ObjectFactory
         )
     }
 
-    pub fn create_occluding(&self, transform: Transform, reverse_winding: bool) -> OccludingPlane
+    pub fn create_occluding<VertexType: Vertex + From<[f32; 4]> + fmt::Debug>(
+        &self,
+        transform: Transform,
+        reverse_winding: bool
+    ) -> OccludingPlane<VertexType>
     {
 		let object_transform = ObjectTransform::new_transformed(transform);
 

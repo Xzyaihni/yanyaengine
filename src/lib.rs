@@ -109,11 +109,19 @@ pub struct SimpleVertex
     pub position: [f32; 4]
 }
 
+impl From<[f32; 4]> for SimpleVertex
+{
+    fn from(position: [f32; 4]) -> Self
+    {
+        Self{position}
+    }
+}
+
 impl From<([f32; 4], [f32; 2])> for SimpleVertex
 {
     fn from((position, _): ([f32; 4], [f32; 2])) -> Self
     {
-        Self{position}
+        Self::from(position)
     }
 }
 
@@ -255,7 +263,7 @@ impl ShadersGroup<EntryPoint>
 pub struct Shader
 {
     pub shader: ShadersGroup<WrapperShaderFn>,
-    pub per_vertex: Option<VertexBufferDescription>,
+    pub per_vertex: Option<Vec<VertexBufferDescription>>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>,
     pub cull: CullMode,

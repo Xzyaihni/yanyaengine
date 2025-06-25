@@ -17,18 +17,18 @@ use crate::{
 };
 
 
-pub struct OccludingPlane
+pub struct OccludingPlane<VertexType=SimpleVertex>
 {
     transform: ObjectTransform,
-    subbuffer: Subbuffer<[SimpleVertex]>,
-    is_clockwise: bool,
+    subbuffer: Subbuffer<[VertexType]>,
+    is_back: bool,
     reverse_winding: bool,
     #[cfg(debug_assertions)]
     updated_buffers: Option<bool>
 }
 
 #[allow(dead_code)]
-impl OccludingPlane
+impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType>
 {
     pub fn new_default(
         allocator: &ObjectAllocator
@@ -50,7 +50,7 @@ impl OccludingPlane
         Self{
             transform,
             subbuffer,
-            is_clockwise: false,
+            is_back: false,
             reverse_winding,
             #[cfg(debug_assertions)]
             updated_buffers: None
@@ -61,7 +61,7 @@ impl OccludingPlane
         &self,
         origin: Vector3<f32>,
         projection_view: Matrix4<f32>
-    ) -> (Box<[SimpleVertex]>, bool)
+    ) -> (Box<[VertexType]>, bool)
     {
         let transform = self.transform.matrix();
 
@@ -129,13 +129,13 @@ impl OccludingPlane
 
         (vertices.iter().map(move |&vertex|
         {
-            SimpleVertex{position: vertex.into()}
+            VertexType::from(vertex.into())
         }).collect::<Box<[_]>>(), is_clockwise)
     }
 
-    pub fn is_clockwise(&self) -> bool
+    pub fn is_back(&self) -> bool
     {
-        self.is_clockwise
+        self.is_back
     }
 
     pub fn reverse_winding(&self) -> bool
@@ -152,9 +152,9 @@ impl OccludingPlane
         self.set_updated(&info.partial);
 
         let (vertices, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
-        self.is_clockwise = is_clockwise;
+        self.is_back = !(is_clockwise ^ self.reverse_winding);
 
-        if !(self.is_clockwise() ^ self.reverse_winding())
+        if self.is_back
         {
             return;
         }
@@ -170,7 +170,7 @@ impl OccludingPlane
     {
         self.assert_updated(&info.object_info);
 
-        if !(self.is_clockwise() ^ self.reverse_winding())
+        if self.is_back
         {
             return;
         }
@@ -203,7 +203,7 @@ impl OccludingPlane
     }
 }
 
-impl OnTransformCallback for OccludingPlane
+impl<VertexType> OnTransformCallback for OccludingPlane<VertexType>
 {
     fn callback(&mut self)
     {
@@ -211,7 +211,7 @@ impl OnTransformCallback for OccludingPlane
     }
 }
 
-impl TransformContainer for OccludingPlane
+impl<VertexType> TransformContainer for OccludingPlane<VertexType>
 {
     fn transform_ref(&self) -> &Transform
     {
@@ -224,7 +224,7 @@ impl TransformContainer for OccludingPlane
     }
 }
 
-impl fmt::Debug for OccludingPlane
+impl<VertexType: fmt::Debug> fmt::Debug for OccludingPlane<VertexType>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
     {

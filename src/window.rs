@@ -12,7 +12,6 @@ use vulkano::{
     format::{Format, NumericFormat, ClearValue},
     memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     descriptor_set::allocator::StandardDescriptorSetAllocator,
-    shader::EntryPoint,
     sync::{
         GpuFuture,
         future::FenceSignalFuture
@@ -31,7 +30,7 @@ use vulkano::{
             color_blend::{ColorBlendState, ColorBlendAttachmentState, AttachmentBlend},
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
-            vertex_input::{VertexBufferDescription, VertexDefinition},
+            vertex_input::{VertexInputState, VertexDefinition},
             viewport::{Scissor, Viewport, ViewportState}
         }
     },
@@ -103,7 +102,6 @@ use crate::{
     YanyaApp,
     AppOptions,
     Control,
-    ShadersGroup,
     ShadersContainer,
     engine::Engine,
     game_object::*,
@@ -131,8 +129,7 @@ impl From<Arc<GraphicsPipeline>> for PipelineInfo
 pub struct PipelineCreateInfo
 {
     pub stages: Vec<PipelineShaderStageCreateInfo>,
-    pub per_vertex: VertexBufferDescription,
-    pub shaders: ShadersGroup<EntryPoint>,
+    pub per_vertex: VertexInputState,
     pub layout: Arc<PipelineLayout>,
     pub depth: Option<DepthState>,
     pub stencil: Option<StencilState>,
@@ -385,10 +382,7 @@ impl<T: Clone> RenderInfo<T>
             None,
             GraphicsPipelineCreateInfo{
                 stages: shader.stages.iter().cloned().collect(),
-                vertex_input_state: Some(shader.per_vertex
-                    .definition(&shader.shaders.vertex)
-                    .unwrap()
-                ),
+                vertex_input_state: Some(shader.per_vertex.clone()),
                 input_assembly_state: Some(InputAssemblyState::default()),
                 viewport_state: Some(ViewportState{
                     viewports: [viewport].into_iter().collect(),
@@ -637,11 +631,10 @@ impl<T: Clone> InfoInit<T>
             let per_vertex = shader_item.per_vertex.unwrap_or_else(||
             {
                 panic!("per_vertex must be provided for shader #{index}")
-            });
+            }).definition(&shader.vertex).unwrap();
 
             PipelineCreateInfo{
                 stages: stages.into(),
-                shaders: shader,
                 per_vertex,
                 layout,
                 depth: shader_item.depth,
