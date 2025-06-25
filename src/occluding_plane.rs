@@ -125,24 +125,23 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             ]
         };
 
-        let is_clockwise = {
+        let (is_clockwise, points) = {
             let un_top_left = un_bottom_left.xyz() + un_bottom_left.xyz() - origin;
-            let top_left = (projection_view * with_w(un_top_left, 1.0)).xy();
+            let un_top_right = un_bottom_right.xy() + un_bottom_right.xy() - origin.xy();
 
-            let bottom_left = bottom_left.xy();
-            let bottom_right = bottom_right.xy();
+            let top_left = projection_view * with_w(un_top_left, 1.0);
 
-            let i0 = bottom_right - bottom_left;
-            let i1 = top_left - bottom_left;
+            let i0 = bottom_right.xy() - bottom_left.xy();
+            let i1 = top_left.xy() - bottom_left.xy();
 
-            (i0.x * i1.y) > (i0.y * i1.x)
-        };
+            let is_clockwise = (i0.x * i1.y) > (i0.y * i1.x);
 
-        let points = OccluderPoints{
-            bottom_left: un_bottom_left.xy(),
-            bottom_right: un_bottom_right.xy(),
-            top_left: un_top_left.xy(),
-            top_right: un_top_right.xy()
+            (is_clockwise, OccluderPoints{
+                bottom_left: un_bottom_left.xy(),
+                bottom_right: un_bottom_right.xy(),
+                top_left: un_top_left.xy(),
+                top_right: un_top_right
+            })
         };
 
         (vertices.into_iter().map(move |vertex|
