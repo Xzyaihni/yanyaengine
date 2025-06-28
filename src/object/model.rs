@@ -74,7 +74,7 @@ impl Uvs
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Model
 {
     pub vertices: Vec<[f32; 3]>,
