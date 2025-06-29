@@ -111,8 +111,8 @@ impl NormalGraphicalObject<ObjectVertex> for Object
 #[repr(C)]
 pub struct ObjectVertex
 {
-    #[format(R32G32B32A32_SFLOAT)]
-    pub position: [f32; 4],
+    #[format(R32G32B32_SFLOAT)]
+    pub position: [f32; 3],
 
     #[format(R32G32_SFLOAT)]
     pub uv: [f32; 2]
@@ -120,9 +120,9 @@ pub struct ObjectVertex
 
 impl From<([f32; 4], [f32; 2])> for ObjectVertex
 {
-    fn from((position, uv): ([f32; 4], [f32; 2])) -> Self
+    fn from(([x, y, z, _w], uv): ([f32; 4], [f32; 2])) -> Self
     {
-        Self{position, uv}
+        Self{position: [x, y, z], uv}
     }
 }
 
@@ -181,7 +181,7 @@ impl Object
 
             let vertex = projection_view * transform * vertex;
 
-            ObjectVertex{position: vertex.into(), uv: *uv}
+            ObjectVertex{position: vertex.xyz().into(), uv: *uv}
         }).collect::<Box<[_]>>()
     }
 
