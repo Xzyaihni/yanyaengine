@@ -68,7 +68,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         &self,
         origin: Vector3<f32>,
         projection_view: Matrix4<f32>
-    ) -> (Box<[VertexType]>, Box<[u16]>, OccluderPoints, bool)
+    ) -> (Box<[VertexType]>, OccluderPoints, bool)
     {
         let transform = self.transform.matrix();
 
@@ -99,13 +99,12 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             top_right.z = z;
         }
 
-        let vertices = [bottom_left, top_left, bottom_right, top_right];
-        let indices = if !self.reverse_winding
+        let vertices = if !self.reverse_winding
         {
-            [0, 1, 2, 1, 3, 2]
+            [bottom_left, top_left, bottom_right, top_right]
         } else
         {
-            [3, 1, 2, 1, 0, 2]
+            [top_right, top_left, bottom_right, bottom_left]
         };
 
         let (is_clockwise, points) = {
@@ -130,7 +129,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         (vertices.into_iter().map(move |vertex|
         {
             VertexType::from(vertex.into())
-        }).collect::<Box<[_]>>(), Box::new(indices), points, is_clockwise)
+        }).collect::<Box<[_]>>(), points, is_clockwise)
     }
 
     pub fn is_back(&self) -> bool
@@ -156,7 +155,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
     {
         self.set_updated(&info.partial);
 
-        let (vertices, indices, points, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
+        let (vertices, points, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
         self.is_back = !(is_clockwise ^ self.reverse_winding);
 
         if self.is_back
@@ -169,8 +168,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
         let builder = info.partial.builder_wrapper.builder();
 
-        builder.update_buffer(self.indices.clone(), indices).unwrap()
-            .update_buffer(self.subbuffer.clone(), vertices).unwrap();
+        builder.update_buffer(self.subbuffer.clone(), vertices).unwrap();
     }
 
     pub fn draw(&self, info: &mut DrawInfo)
