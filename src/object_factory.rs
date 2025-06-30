@@ -31,14 +31,15 @@ pub struct ObjectInfo
 #[derive(Debug)]
 pub struct ObjectFactory
 {
-	allocator: ObjectAllocator
+	vertex_allocator: ObjectAllocator,
+    index_allocator: ObjectAllocator
 }
 
 impl ObjectFactory
 {
-	pub fn new(allocator: ObjectAllocator) -> Self
+	pub fn new(vertex_allocator: ObjectAllocator, index_allocator: ObjectAllocator) -> Self
 	{
-		Self{allocator}
+		Self{vertex_allocator, index_allocator}
 	}
 
 	pub fn create(&self, info: ObjectInfo) -> Object
@@ -49,7 +50,8 @@ impl ObjectFactory
 			info.model,
 			info.texture,
 			object_transform,
-			&self.allocator
+			&self.vertex_allocator,
+			&self.index_allocator
 		)
 	}
 
@@ -62,7 +64,8 @@ impl ObjectFactory
         SolidObject::new(
             model,
             ObjectTransform::new_transformed(transform),
-            &self.allocator
+			&self.vertex_allocator,
+			&self.index_allocator
         )
     }
 
@@ -74,6 +77,11 @@ impl ObjectFactory
     {
 		let object_transform = ObjectTransform::new_transformed(transform);
 
-        OccludingPlane::new(object_transform, reverse_winding, &self.allocator)
+        OccludingPlane::new(
+            object_transform,
+            reverse_winding,
+			&self.vertex_allocator,
+			&self.index_allocator
+        )
     }
 }

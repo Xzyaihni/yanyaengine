@@ -32,12 +32,12 @@ pub struct ObjectAllocator
 
 impl ObjectAllocator
 {
-	pub fn new(allocator: Arc<ThisMemoryAllocator>) -> Self
+	pub fn new(allocator: Arc<ThisMemoryAllocator>, buffer_usage: BufferUsage) -> Self
 	{
 		let allocator = SubbufferAllocator::new(
 			allocator,
 			SubbufferAllocatorCreateInfo{
-				buffer_usage: BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST,
+				buffer_usage,
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 				..Default::default()

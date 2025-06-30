@@ -28,6 +28,7 @@ pub struct SolidObject<VertexType=SimpleVertex>
     model: Arc<RwLock<Model>>,
     transform: ObjectTransform,
     subbuffer: Subbuffer<[VertexType]>,
+    indices: Subbuffer<[u16]>,
     #[cfg(debug_assertions)]
     updated_buffers: Option<bool>
 }
@@ -50,28 +51,29 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> NormalGraphic
 #[allow(dead_code)]
 impl<VertexType: Vertex + From<([f32; 4], [f32; 2])>> SolidObject<VertexType>
 {
-    pub fn new_default(
-        model: Arc<RwLock<Model>>,
-        allocator: &ObjectAllocator
-    ) -> Self
-    {
-        let transform = ObjectTransform::new_default();
-
-        Self::new(model, transform, allocator)
-    }
-
     pub fn new(
         model: Arc<RwLock<Model>>,
         transform: ObjectTransform,
-        allocator: &ObjectAllocator
+        vertex_allocator: &ObjectAllocator,
+        index_allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffer = allocator.subbuffer(model.read().vertices.len() as u64);
+        let subbuffer = vertex_allocator.subbuffer(model.read().vertices.len() as u64);
+
+        let indices = {
+            let model_indices = &model.read().indices;
+
+            let indices = index_allocator.subbuffer(model_indices.len() as u64);
+            indices.write().unwrap().copy_from_slice(model_indices.as_slice());
+
+            indices
+        };
 
         Self{
             model,
             transform,
             subbuffer,
+            indices,
             #[cfg(debug_assertions)]
             updated_buffers: None
         }
@@ -120,7 +122,7 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> GameObject fo
 
         self.assert_updated(&info.object_info);
 
-        let size = self.model.read().vertices.len() as u32;
+        let size = self.model.read().indices.len() as u32;
 
         let layout = info.current_layout();
 
@@ -133,9 +135,11 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> GameObject fo
                     info.current_sets.clone()
                 )
                 .unwrap()
+                .bind_index_buffer(self.indices.clone())
+                .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())
                 .unwrap()
-                .draw(size, 1, 0, 0)
+                .draw_indexed(size, 1, 0, 0, 0)
                 .unwrap();
         }
     }

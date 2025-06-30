@@ -30,6 +30,7 @@ pub struct OccludingPlane<VertexType=SimpleVertex>
 {
     transform: ObjectTransform,
     subbuffer: Subbuffer<[VertexType]>,
+    indices: Subbuffer<[u16]>,
     points: Option<OccluderPoints>,
     is_back: bool,
     reverse_winding: bool,
@@ -40,26 +41,21 @@ pub struct OccludingPlane<VertexType=SimpleVertex>
 #[allow(dead_code)]
 impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType>
 {
-    pub fn new_default(
-        allocator: &ObjectAllocator
-    ) -> Self
-    {
-        let transform = ObjectTransform::new_default();
-
-        Self::new(transform, false, allocator)
-    }
-
     pub fn new(
         transform: ObjectTransform,
         reverse_winding: bool,
-        allocator: &ObjectAllocator
+        vertex_allocator: &ObjectAllocator,
+        index_allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffer = allocator.subbuffer(Model::square(1.0).vertices.len() as u64);
+        let square = Model::square(1.0);
+        let subbuffer = vertex_allocator.subbuffer(square.vertices.len() as u64);
+        let indices = index_allocator.subbuffer(square.indices.len() as u64);
 
         Self{
             transform,
             subbuffer,
+            indices,
             points: None,
             is_back: false,
             reverse_winding,
@@ -72,7 +68,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         &self,
         origin: Vector3<f32>,
         projection_view: Matrix4<f32>
-    ) -> (Box<[VertexType]>, OccluderPoints, bool)
+    ) -> (Box<[VertexType]>, Box<[u16]>, OccluderPoints, bool)
     {
         let transform = self.transform.matrix();
 
@@ -103,26 +99,13 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             top_right.z = z;
         }
 
-        let vertices = if !self.reverse_winding
+        let vertices = [bottom_left, top_left, bottom_right, top_right];
+        let indices = if !self.reverse_winding
         {
-            [
-                bottom_left,
-                top_left,
-                bottom_right,
-                top_left,
-                top_right,
-                bottom_right
-            ]
+            [0, 1, 2, 1, 3, 2]
         } else
         {
-            [
-                top_right,
-                top_left,
-                bottom_right,
-                top_left,
-                bottom_left,
-                bottom_right
-            ]
+            [3, 1, 2, 1, 0, 2]
         };
 
         let (is_clockwise, points) = {
@@ -147,7 +130,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         (vertices.into_iter().map(move |vertex|
         {
             VertexType::from(vertex.into())
-        }).collect::<Box<[_]>>(), points, is_clockwise)
+        }).collect::<Box<[_]>>(), Box::new(indices), points, is_clockwise)
     }
 
     pub fn is_back(&self) -> bool
@@ -173,7 +156,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
     {
         self.set_updated(&info.partial);
 
-        let (vertices, points, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
+        let (vertices, indices, points, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
         self.is_back = !(is_clockwise ^ self.reverse_winding);
 
         if self.is_back
@@ -184,11 +167,10 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
         self.points = Some(points);
 
-        info.partial.builder_wrapper.builder()
-            .update_buffer(
-                self.subbuffer.clone(),
-                vertices
-            ).unwrap();
+        let builder = info.partial.builder_wrapper.builder();
+
+        builder.update_buffer(self.indices.clone(), indices).unwrap()
+            .update_buffer(self.subbuffer.clone(), vertices).unwrap();
     }
 
     pub fn draw(&self, info: &mut DrawInfo)
@@ -200,7 +182,7 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             return;
         }
 
-        let square_vertices = Model::square(1.0).vertices.len() as u32;
+        let square_indices = Model::square(1.0).indices.len() as u32;
 
         let layout = info.current_layout();
 
@@ -213,9 +195,11 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
                     info.current_sets.clone()
                 )
                 .unwrap()
+                .bind_index_buffer(self.indices.clone())
+                .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())
                 .unwrap()
-                .draw(square_vertices, 1, 0, 0)
+                .draw_indexed(square_indices, 1, 0, 0, 0)
                 .unwrap();
         }
     }

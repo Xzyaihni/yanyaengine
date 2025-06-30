@@ -78,6 +78,7 @@ impl Uvs
 pub struct Model
 {
     pub vertices: Vec<[f32; 3]>,
+    pub indices: Vec<u16>,
     pub uvs: Vec<[f32; 2]>
 }
 
@@ -86,7 +87,7 @@ impl Model
 {
     pub fn new() -> Self
     {
-        Self{vertices: Vec::new(), uvs: Vec::new()}
+        Self{vertices: Vec::new(), indices: Vec::new(), uvs: Vec::new()}
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ParseError>
@@ -119,21 +120,19 @@ impl Model
             [-half_width, -half_height, 0.0],
             [-half_width, half_height, 0.0],
             [half_width, -half_height, 0.0],
-            [-half_width, half_height, 0.0],
-            [half_width, half_height, 0.0],
-            [half_width, -half_height, 0.0]
+            [half_width, half_height, 0.0]
         ];
+
+        let indices = vec![0, 1, 2, 1, 3, 2];
 
         let uvs = vec![
             uvs.bottom_left(),
             uvs.top_left(),
             uvs.bottom_right(),
-            uvs.top_left(),
-            uvs.top_right(),
-            uvs.bottom_right()
+            uvs.top_right()
         ];
 
-        Self{vertices, uvs}
+        Self{vertices, indices, uvs}
     }
 
     pub fn shift(&mut self, offset: Vector3<f32>)
@@ -150,6 +149,7 @@ impl Model
 struct ObjParser
 {
     vertices: Vec<[f32; 3]>,
+    indices: Vec<u16>,
     uvs: Vec<[f32; 2]>
 }
 
@@ -158,15 +158,16 @@ impl ObjParser
     pub fn new() -> Self
     {
         let vertices = Vec::new();
+        let indices = Vec::new();
         let uvs = Vec::new();
 
-        Self{vertices, uvs}
+        Self{vertices, indices, uvs}
     }
 
     pub fn parse<P: AsRef<Path>>(self, _path: P) -> Result<Model, ParseError>
     {
         // ill do this later wutever blablabla
 
-        Ok(Model{vertices: self.vertices, uvs: self.uvs})
+        Ok(Model{vertices: self.vertices, indices: self.indices, uvs: self.uvs})
     }
 }

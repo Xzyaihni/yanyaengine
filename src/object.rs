@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use std::{
     fmt,
+    ops::DerefMut,
     cell::RefCell,
     sync::Arc
 };
@@ -132,6 +133,7 @@ pub struct Object
     texture: Arc<Mutex<Texture>>,
     transform: ObjectTransform,
     subbuffer: Subbuffer<[ObjectVertex]>,
+    indices: Subbuffer<[u16]>,
     #[cfg(debug_assertions)]
     updated_buffers: Option<bool>
 }
@@ -139,31 +141,31 @@ pub struct Object
 #[allow(dead_code)]
 impl Object
 {
-    pub fn new_default(
-        model: Arc<RwLock<Model>>,
-        texture: Arc<Mutex<Texture>>,
-        allocator: &ObjectAllocator
-    ) -> Self
-    {
-        let transform = ObjectTransform::new_default();
-
-        Self::new(model, texture, transform, allocator)
-    }
-
     pub fn new(
         model: Arc<RwLock<Model>>,
         texture: Arc<Mutex<Texture>>,
         transform: ObjectTransform,
-        allocator: &ObjectAllocator
+        vertex_allocator: &ObjectAllocator,
+        index_allocator: &ObjectAllocator
     ) -> Self
     {
-        let subbuffer = allocator.subbuffer(model.read().vertices.len() as u64);
+        let subbuffer = vertex_allocator.subbuffer(model.read().vertices.len() as u64);
+
+        let indices = {
+            let model_indices = &model.read().indices;
+
+            let indices = index_allocator.subbuffer(model_indices.len() as u64);
+            indices.write().unwrap().copy_from_slice(model_indices.as_slice());
+
+            indices
+        };
 
         Self{
             model,
             texture,
             transform,
             subbuffer,
+            indices,
             #[cfg(debug_assertions)]
             updated_buffers: None
         }
@@ -194,6 +196,7 @@ impl Object
     {
         let mut current_model = self.model.write();
         assert_eq!(current_model.vertices.len(), model.vertices.len());
+        assert_eq!(current_model.indices.len(), model.indices.len());
 
         *current_model = model;
     }
@@ -215,7 +218,7 @@ impl Object
 
     fn needs_draw(&self) -> bool
     {
-        !self.model.read().vertices.is_empty()
+        !self.model.read().indices.is_empty()
     }
 
     pub fn per_vertex() -> VertexBufferDescription
@@ -242,7 +245,7 @@ impl GameObject for Object
 
         self.assert_updated(&info.object_info);
 
-        let size = self.model.read().vertices.len() as u32;
+        let size = self.model.read().indices.len() as u32;
 
         let layout = info.current_layout();
 
@@ -258,9 +261,11 @@ impl GameObject for Object
                     sets
                 )
                 .unwrap()
+                .bind_index_buffer(self.indices.clone())
+                .unwrap()
                 .bind_vertex_buffers(0, self.subbuffer.clone())
                 .unwrap()
-                .draw(size, 1, 0, 0)
+                .draw_indexed(size, 1, 0, 0, 0)
                 .unwrap();
         }
     }

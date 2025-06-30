@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 
 use vulkano::{
     device::Device,
+    buffer::BufferUsage,
     memory::allocator::StandardMemoryAllocator
 };
 
@@ -48,10 +49,20 @@ impl Engine
         let assets = Arc::new(Mutex::new(assets));
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device));
-        let allocator = ObjectAllocator::new(memory_allocator.clone());
+
+        let vertex_allocator = ObjectAllocator::new(
+            memory_allocator.clone(),
+            BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST
+        );
+
+        let index_allocator = ObjectAllocator::new(
+            memory_allocator.clone(),
+            BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST
+        );
+
         let uniform_allocator = Rc::new(UniformAllocator::new(memory_allocator));
 
-        let object_factory = ObjectFactory::new(allocator);
+        let object_factory = ObjectFactory::new(vertex_allocator, index_allocator);
         let object_factory = Rc::new(object_factory);
 
         let fonts_info = Rc::new(FontsContainer::new());
