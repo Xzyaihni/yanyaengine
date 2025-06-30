@@ -50,7 +50,15 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
     {
         let square = Model::square(1.0);
         let subbuffer = vertex_allocator.subbuffer(square.vertices.len() as u64);
-        let indices = index_allocator.subbuffer(square.indices.len() as u64);
+
+        let indices = {
+            let model_indices = &square.indices;
+
+            let indices = index_allocator.subbuffer(model_indices.len() as u64);
+            indices.write().unwrap().copy_from_slice(model_indices.as_slice());
+
+            indices
+        };
 
         Self{
             transform,
