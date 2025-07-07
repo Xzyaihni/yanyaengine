@@ -347,12 +347,12 @@ impl Assets
         })
     }
 
-    pub fn try_texture_by_name(&self, name: &str) -> Option<&Arc<Mutex<Texture>>>
+    pub fn try_texture_by_name<'a>(&'a self, name: &str) -> Option<&'a Arc<Mutex<Texture>>>
     {
         Some(&self.textures[self.try_texture_id(name)?])
     }
 
-    pub fn texture_by_name(&self, name: &str) -> &Arc<Mutex<Texture>>
+    pub fn texture_by_name<'a>(&'a self, name: &str) -> &'a Arc<Mutex<Texture>>
     {
         &self.textures[self.texture_id(name)]
     }
@@ -377,12 +377,12 @@ impl Assets
         })
     }
 
-    pub fn try_model_by_name(&self, name: &str) -> Option<&Arc<RwLock<Model>>>
+    pub fn try_model_by_name<'a>(&'a self, name: &str) -> Option<&'a Arc<RwLock<Model>>>
     {
         Some(&self.models[self.try_model_id(name)?])
     }
 
-    pub fn model_by_name(&self, name: &str) -> &Arc<RwLock<Model>>
+    pub fn model_by_name<'a>(&'a self, name: &str) -> &'a Arc<RwLock<Model>>
     {
         &self.models[self.model_id(name)]
     }
