@@ -17,7 +17,7 @@ use vulkano::{
             color_blend::AttachmentBlend,
             rasterization::CullMode,
             vertex_input::{VertexBufferDescription, Vertex},
-            depth_stencil::{DepthState, StencilState}
+            depth_stencil::{CompareOp, DepthState, StencilState}
         }
     },
     shader::{EntryPoint, ShaderModule, SpecializedShaderModule},
@@ -428,7 +428,14 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
         if self.shaders.is_empty()
         {
             // load default shaders
-            self.shaders.push(Shader::default());
+            self.shaders.push(Shader{
+                per_vertex: Some(vec![Object::per_vertex()]),
+                depth: Some(DepthState{
+                    write_enable: false,
+                    compare_op: CompareOp::Less
+                }),
+                ..Default::default()
+            });
         }
 
         window::run::<UserApp, T>(
