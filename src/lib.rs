@@ -309,6 +309,14 @@ impl IntoIterator for ShadersContainer
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShaderId(usize);
 
+impl Default for ShaderId
+{
+    fn default() -> Self
+    {
+        Self(0)
+    }
+}
+
 impl ShaderId
 {
     pub fn get_raw(&self) -> usize

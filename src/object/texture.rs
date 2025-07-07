@@ -392,7 +392,10 @@ impl Texture
     pub fn descriptor_set(&mut self, info: &DrawInfo) -> Arc<DescriptorSet>
     {
         let current = (
-            info.current_pipeline_id().unwrap(),
+            info.current_pipeline_id().unwrap_or_else(||
+            {
+                panic!("tried to get current pipeline without a pipeline bound")
+            }),
             UniformLocation{set: 0, binding: 0}
         );
 
