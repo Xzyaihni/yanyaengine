@@ -129,9 +129,10 @@ pub trait YanyaApp
 where
     Self: Sized
 {
+    type SetupInfo: Clone;
     type AppInfo: Default;
 
-    fn init(info: InitPartialInfo, app_info: Self::AppInfo) -> Self;
+    fn init(info: InitPartialInfo<Self::SetupInfo>, app_info: Self::AppInfo) -> Self;
 
     fn input(&mut self, _control: Control) {}
 
@@ -428,10 +429,11 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
 
         self
     }
+}
 
+impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp, UserApp::SetupInfo>
+{
     pub fn run(mut self)
-    where
-        T: Clone
     {
         if self.shaders.is_empty()
         {
@@ -446,7 +448,7 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
             });
         }
 
-        window::run::<UserApp, T>(
+        window::run::<UserApp>(
             InfoInit{
                 window_attributes: self.window_attributes,
                 rendering: self.rendering,

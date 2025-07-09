@@ -143,7 +143,7 @@ pub type RenderPassCreator<T> = Box<dyn FnOnce(T, Arc<Device>, Format) -> Arc<Re
 
 pub struct Rendering<T>
 {
-    pub setup: Box<dyn FnOnce(Arc<PhysicalDevice>) -> T>,
+    pub setup: Box<dyn FnOnce(Arc<Device>) -> T>,
     pub attachments: AttachmentCreator<T>,
     pub render_pass: RenderPassCreator<T>,
     pub clear: Vec<Option<ClearValue>>
@@ -278,7 +278,7 @@ impl<T: Clone> RenderInfo<T>
             }
         ).unwrap();
 
-        let setup = (info.rendering.setup)(info.physical_device.clone());
+        let setup = (info.rendering.setup)(device.clone());
         let render_pass = (info.rendering.render_pass)(setup.clone(), device.clone(), image_format);
 
         let attachment_creator = info.rendering.attachments;
@@ -710,12 +710,12 @@ impl<T: Clone> InfoInit<T>
     }
 }
 
-pub fn run<UserApp: YanyaApp + 'static, T: Clone>(
-    info_init: InfoInit<T>,
+pub fn run<UserApp: YanyaApp + 'static>(
+    info_init: InfoInit<UserApp::SetupInfo>,
     app_init: UserApp::AppInfo
 )
 {
-    let mut app: WindowEventHandler<UserApp, UserApp::AppInfo, T> = WindowEventHandler{
+    let mut app: WindowEventHandler<UserApp, UserApp::AppInfo, UserApp::SetupInfo> = WindowEventHandler{
         info_init: Some(info_init),
         info: None,
         app_init: Some(app_init)
@@ -807,7 +807,7 @@ impl<UserApp, Init, T> WindowEventHandler<UserApp, Init, T>
     }
 }
 
-impl<UserApp: YanyaApp + 'static, T: Clone> ApplicationHandler for WindowEventHandler<UserApp, UserApp::AppInfo, T>
+impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<UserApp, UserApp::AppInfo, UserApp::SetupInfo>
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop)
     {
@@ -929,8 +929,8 @@ impl<UserApp: YanyaApp + 'static, T: Clone> ApplicationHandler for WindowEventHa
     }
 }
 
-fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
-    info: &mut HandleEventInfo<UserApp, T>,
+fn handle_redraw<UserApp: YanyaApp + 'static>(
+    info: &mut HandleEventInfo<UserApp, UserApp::SetupInfo>,
     app_init: &mut Option<UserApp::AppInfo>
 )
 {
@@ -1007,7 +1007,8 @@ fn handle_redraw<UserApp: YanyaApp + 'static, T: Clone>(
                     .unwrap()
                     .init_partial_info(
                         info.render_info.resource_uploader(&mut builder),
-                        info.render_info.size()
+                        info.render_info.size(),
+                        &info.render_info.setup
                     );
 
                 let app_init = app_init.take().unwrap();

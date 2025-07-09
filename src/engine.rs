@@ -96,13 +96,17 @@ impl Engine
         }
     }
 
-    pub fn init_partial_info<'a>(
+    pub fn init_partial_info<'a, T>(
         &'a mut self,
         resource_uploader: ResourceUploader<'a>,
-        size: [f32; 2]
-    ) -> InitPartialInfo<'a>
+        size: [f32; 2],
+        setup: &'a T
+    ) -> InitPartialInfo<'a, T>
     {
-        self.object_create_partial_info(resource_uploader, size, false)
+        InitPartialInfo{
+            object_info: self.object_create_partial_info(resource_uploader, size, false),
+            setup
+        }
     }
 
     pub fn swap_pipelines(&mut self)

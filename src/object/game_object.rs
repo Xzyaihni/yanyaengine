@@ -78,7 +78,12 @@ impl ObjectCreateInfo<'_>
     }
 }
 
-pub type InitPartialInfo<'a> = ObjectCreatePartialInfo<'a>;
+pub struct InitPartialInfo<'a, T>
+{
+    pub object_info: ObjectCreatePartialInfo<'a>,
+    pub setup: &'a T
+}
+
 pub type InitInfo<'a> = ObjectCreateInfo<'a>;
 
 pub struct DrawInfo<'a>
