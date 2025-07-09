@@ -145,6 +145,8 @@ where
     fn resize(&mut self, _aspect: f32) {}
 
     fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
+
+    fn render_pass_ended(&mut self, _builder: &mut CommandBuilderType) {}
 }
 
 #[derive(Default)]

@@ -1126,6 +1126,9 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
     }
 
     frame_info.builder.end_render_pass(Default::default()).unwrap();
+
+    user_app.render_pass_ended(&mut frame_info.builder);
+
     frame_info.builder.build().unwrap()
 }
 
