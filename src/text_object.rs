@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    iter,
+    sync::Arc
+};
 
 use parking_lot::{RwLock, Mutex};
 
@@ -30,6 +33,7 @@ pub struct TextCreateInfo<'a>
 struct BoundsInfo<'a>
 {
     advance: f32,
+    kern: f32,
     glyph: &'a Glyph
 }
 
@@ -55,9 +59,9 @@ impl BoundsCalculator
 
     fn process(&mut self, bounds: BoundsInfo) -> Vector2<f32>
     {
-        let this_position = self.position;
+        let this_position = self.position + Vector2::new(bounds.kern, 0.0);
 
-        self.position.x += bounds.advance;
+        self.position.x += bounds.advance + bounds.kern;
 
         self.width = self.width.max(self.position.x);
         self.height = self.height.max(self.position.y + bounds.glyph.scale.y);
@@ -153,9 +157,9 @@ impl TextObject
             }
 
             // i dunno how to not collect >_<
-            line.chars().map(|c|
+            iter::repeat(None).chain(line.chars().map(Some)).zip(line.chars()).map(|(last, c)|
             {
-                font.bounds(&mut full_bounds, c)
+                font.bounds(&mut full_bounds, last, c)
             }).collect::<Vec<_>>()
         }).collect();
 
@@ -251,13 +255,21 @@ struct CharsRasterizerScaled<'a>
 
 impl CharsRasterizerScaled<'_>
 {
-    fn bounds(&self, bounds_calculator: &mut BoundsCalculator, c: char) -> CharInfo
+    fn bounds(&self, bounds_calculator: &mut BoundsCalculator, last: Option<char>, c: char) -> CharInfo
     {
         let glyph_id = self.font.glyph_id(c);
         let mut glyph = self.font.scaled_glyph(c);
 
+        let kern = last.map(|last|
+        {
+            let last_glyph_id = self.font.glyph_id(last);
+
+            self.font.kern(last_glyph_id, glyph_id)
+        }).unwrap_or(0.0);
+
         let offset = bounds_calculator.process(BoundsInfo{
             advance: self.font.h_advance(glyph_id),
+            kern,
             glyph: &glyph
         });
 
@@ -273,17 +285,18 @@ impl CharsRasterizerScaled<'_>
 
     fn render(&self, image: &mut SimpleImage, info: CharInfo)
     {
-        let position = info.glyph.position;
         let ascent = self.font.ascent();
 
         if let Some(outlined) = self.font.outline_glyph(info.glyph)
         {
-            let px_bounds = outlined.px_bounds();
+            let bounds = outlined.px_bounds();
+
+            let pos = Vector2::new(bounds.min.x, bounds.min.y);
 
             outlined.draw(|x, y, amount|
             {
-                let x = (x as f32 + position.x) as usize;
-                let y = (y as f32 + ascent + px_bounds.min.y) as usize;
+                let x = (pos.x + x as f32) as usize;
+                let y = (pos.y + y as f32 + ascent) as usize;
 
                 if !((0..image.width).contains(&x) && (0..image.height).contains(&y))
                 {
