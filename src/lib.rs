@@ -356,8 +356,18 @@ pub struct AppBuilder<UserApp: YanyaApp, T>
     shaders: ShadersContainer,
     options: AppOptions,
     app_init: Option<UserApp::AppInfo>,
-    rendering: Rendering<T>,
+    rendering: Rendering<UserApp, T>,
     _user_app: PhantomData<UserApp>
+}
+
+impl<UserApp: YanyaApp + 'static> AppBuilder<UserApp, ()>
+{
+    pub fn with_clear_color(mut self, color: [f32; 3]) -> Self
+    {
+        self.rendering = Rendering::new_default([color[0], color[1], color[2], 1.0].into());
+
+        self
+    }
 }
 
 impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
@@ -389,14 +399,7 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
         self
     }
 
-    pub fn with_clear_color(mut self, color: [f32; 3]) -> Self
-    {
-        self.rendering.clear[0] = Some([color[0], color[1], color[2], 1.0].into());
-
-        self
-    }
-
-    pub fn with_rendering<U>(self, rendering: Rendering<U>) -> AppBuilder<UserApp, U>
+    pub fn with_rendering<U>(self, rendering: Rendering<UserApp, U>) -> AppBuilder<UserApp, U>
     {
         AppBuilder{
             window_attributes: self.window_attributes,
