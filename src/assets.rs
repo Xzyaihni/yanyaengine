@@ -14,6 +14,7 @@ use strum::{IntoEnumIterator, EnumIter, IntoStaticStr};
 use serde::{Serialize, Deserialize};
 
 use crate::{
+    UpdateBuffersInfo,
     BuilderWrapper,
     object::{
         resource_uploader::ResourceUploader,
@@ -73,41 +74,41 @@ impl FilesLoader
 
     pub fn load(folder_path: impl AsRef<Path>) -> impl Iterator<Item=NamedValue<PathBuf>>
     {
-		Self::recursive_dir(folder_path.as_ref()).map(move |name|
-		{
+        Self::recursive_dir(folder_path.as_ref()).map(move |name|
+        {
             let value = name.clone();
 
-			let short_path = name.strip_prefix(folder_path.as_ref())
+            let short_path = name.strip_prefix(folder_path.as_ref())
                 .expect("all paths must be in parent folder")
                 .to_string_lossy().into_owned();
 
             NamedValue{name: short_path, value}
-		})
+        })
     }
 
-	fn recursive_dir(path: &Path) -> impl Iterator<Item=PathBuf>
-	{
-		let mut collector = Vec::new();
+    fn recursive_dir(path: &Path) -> impl Iterator<Item=PathBuf>
+    {
+        let mut collector = Vec::new();
 
-		Self::recursive_dir_inner(path, &mut collector);
+        Self::recursive_dir_inner(path, &mut collector);
 
-		collector.into_iter()
-	}
+        collector.into_iter()
+    }
 
-	fn recursive_dir_inner(path: &Path, collector: &mut Vec<PathBuf>)
-	{
-		fs::read_dir(path).unwrap().flatten().for_each(|entry|
-		{
-			let path = entry.path();
-			if path.is_dir()
-			{
-				Self::recursive_dir_inner(&path, collector);
-			} else
-			{
-				collector.push(entry.path());
-			}
-		})
-	}
+    fn recursive_dir_inner(path: &Path, collector: &mut Vec<PathBuf>)
+    {
+        fs::read_dir(path).unwrap().flatten().for_each(|entry|
+        {
+            let path = entry.path();
+            if path.is_dir()
+            {
+                Self::recursive_dir_inner(&path, collector);
+            } else
+            {
+                collector.push(entry.path());
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize, bincode::Decode, bincode::Encode)]
@@ -256,8 +257,9 @@ where
 pub struct Assets
 {
     textures_path: Option<PathBuf>,
+    models_path: Option<PathBuf>,
     textures: IdsStorage<TextureId, Arc<Mutex<Texture>>>,
-	models: IdsStorage<ModelId, Arc<RwLock<Model>>>
+    models: IdsStorage<ModelId, Arc<RwLock<Model>>>
 }
 
 impl Assets
@@ -272,6 +274,8 @@ impl Assets
         ModelsPath: AsRef<Path>
     {
         let output_textures_path = textures_path.as_ref().map(|x| x.as_ref().to_owned());
+        let output_models_path = models_path.as_ref().map(|x| x.as_ref().to_owned());
+
         let mut textures = Self::load_resource(textures_path, |path|
         {
             FilesLoader::load_images(path).map(|named_value|
@@ -297,9 +301,18 @@ impl Assets
 
         Self{
             textures_path: output_textures_path,
+            models_path: output_models_path,
             textures,
             models
         }
+    }
+
+    pub fn reload(&mut self, info: &mut UpdateBuffersInfo)
+    {
+        let textures_path = self.textures_path.clone();
+        let models_path = self.models_path.clone();
+
+        *self = Self::new(info.partial.builder_wrapper.resource_uploader_mut(), textures_path, models_path);
     }
 
     fn load_resource<Id, T, U, F, I, P>(
@@ -473,13 +486,13 @@ impl Assets
         })
     }
 
-	pub fn swap_pipelines(&mut self)
-	{
-		self.textures.iter_mut().for_each(|texture|
-		{
-			texture.lock().swap_pipeline()
-		});
-	}
+    pub fn swap_pipelines(&mut self)
+    {
+        self.textures.iter_mut().for_each(|texture|
+        {
+            texture.lock().swap_pipeline()
+        });
+    }
 }
 
 impl fmt::Debug for Assets
