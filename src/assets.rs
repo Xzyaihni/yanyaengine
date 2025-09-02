@@ -66,9 +66,22 @@ impl FilesLoader
 {
     pub fn load_images(folder_path: impl AsRef<Path>) -> impl Iterator<Item=NamedValue<RgbaImage>>
     {
-        Self::load(folder_path).map(|named_value|
+        Self::load(folder_path).filter_map(|named_value|
         {
-            named_value.map(|path| RgbaImage::load(path).unwrap())
+            let image = match RgbaImage::load(named_value.value)
+            {
+                Ok(x) => x,
+                Err(err) =>
+                {
+                    eprintln!("error loading {}: {err}", &named_value.name);
+                    return None;
+                }
+            };
+
+            Some(NamedValue{
+                name: named_value.name,
+                value: image
+            })
         })
     }
 
