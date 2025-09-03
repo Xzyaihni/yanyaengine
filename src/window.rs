@@ -828,7 +828,11 @@ impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<User
         {
             WindowEvent::CloseRequested =>
             {
-                drop(self.info_mut().user_app.take());
+                let info = self.info_mut();
+
+                drop(info.user_app.take());
+
+                info.initialized = false;
 
                 event_loop.exit()
             },
@@ -1009,7 +1013,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                         &info.render_info.setup
                     );
 
-                let app_init = app_init.take().unwrap();
+                let app_init = if let Some(x) = app_init.take() { x } else { return; };
                 Some(UserApp::init(init_info, app_init))
             };
         } else if info.user_app.is_none()
