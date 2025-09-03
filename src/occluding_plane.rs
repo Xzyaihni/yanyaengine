@@ -35,6 +35,8 @@ pub struct OccludingPlane<VertexType=SimpleVertex>
     is_back: bool,
     reverse_winding: bool,
     #[cfg(debug_assertions)]
+    debug_points: OccluderPoints,
+    #[cfg(debug_assertions)]
     updated_buffers: Option<bool>
 }
 
@@ -67,6 +69,13 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
             points: None,
             is_back: false,
             reverse_winding,
+            #[cfg(debug_assertions)]
+            debug_points: OccluderPoints{
+                bottom_left: Vector2::zeros(),
+                bottom_right: Vector2::zeros(),
+                top_left: Vector2::zeros(),
+                top_right: Vector2::zeros(),
+            },
             #[cfg(debug_assertions)]
             updated_buffers: None
         }
@@ -150,6 +159,18 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
         self.reverse_winding
     }
 
+    #[cfg(debug_assertions)]
+    pub fn debug_points(&self) -> &OccluderPoints
+    {
+        &self.debug_points
+    }
+
+    #[cfg(not(debug_assertions))]
+    pub fn debug_points(&self) -> &OccluderPoints
+    {
+        unreachable!()
+    }
+
     pub fn points(&self) -> &Option<OccluderPoints>
     {
         &self.points
@@ -165,6 +186,11 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
         let (vertices, points, is_clockwise) = self.calculate_vertices(origin, info.projection_view);
         self.is_back = !(is_clockwise ^ self.reverse_winding);
+
+        #[cfg(debug_assertions)]
+        {
+            self.debug_points = points;
+        }
 
         if self.is_back
         {
