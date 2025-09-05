@@ -25,9 +25,9 @@ impl Default for Transform
 		let rotation = 0.0;
 
 		let position = Vector3::zeros();
-		let scale = Vector3::new(1.0, 1.0, 1.0);
+		let scale = Vector3::repeat(1.0);
 
-		let stretch = (0.0, Vector2::new(1.0, 1.0));
+		let stretch = (0.0, Vector2::repeat(1.0));
 
 		Self{rotation, position, scale, stretch}
     }
