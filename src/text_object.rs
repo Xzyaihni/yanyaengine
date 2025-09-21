@@ -240,7 +240,7 @@ impl CharsRasterizer
         Self{font}
     }
 
-    fn with_font_size(&self, font_size: u32) -> CharsRasterizerScaled
+    fn with_font_size(&self, font_size: u32) -> CharsRasterizerScaled<'_>
     {
         let pixel_scale = self.font.pt_to_px_scale(font_size as f32).unwrap();
 

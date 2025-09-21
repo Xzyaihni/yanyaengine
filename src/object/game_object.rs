@@ -204,7 +204,7 @@ impl<'a> DrawInfo<'a>
             .unwrap();
     }
 
-    pub fn resource_uploader(&self) -> &ResourceUploader
+    pub fn resource_uploader(&self) -> &ResourceUploader<'_>
     {
         self.object_info.builder_wrapper.resource_uploader()
     }

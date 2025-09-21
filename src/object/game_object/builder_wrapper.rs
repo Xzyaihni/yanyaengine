@@ -44,7 +44,7 @@ impl<'a> BuilderWrapper<'a>
         &mut self.resource_uploader
     }
 
-    pub fn resource_uploader(&self) -> &ResourceUploader
+    pub fn resource_uploader(&self) -> &ResourceUploader<'_>
     {
         &self.resource_uploader
     }
