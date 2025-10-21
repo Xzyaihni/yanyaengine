@@ -144,6 +144,8 @@ where
 
     fn resize(&mut self, _aspect: f32) {}
 
+    fn early_exit(&self) -> bool { false }
+
     fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
 
     fn render_pass_ended(&mut self, _builder: &mut CommandBuilderType) {}

@@ -584,6 +584,16 @@ impl<UserApp, T> From<HandleEventInfoRaw<UserApp, T>> for HandleEventInfo<UserAp
     }
 }
 
+impl<UserApp, T> HandleEventInfo<UserApp, T>
+{
+    fn exit(&mut self)
+    {
+        drop(self.user_app.take());
+
+        self.initialized = false;
+    }
+}
+
 pub struct InfoInit<App, T>
 {
     pub window_attributes: WindowAttributes,
@@ -828,11 +838,7 @@ impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<User
         {
             WindowEvent::CloseRequested =>
             {
-                let info = self.info_mut();
-
-                drop(info.user_app.take());
-
-                info.initialized = false;
+                self.info_mut().exit();
 
                 event_loop.exit()
             },
@@ -843,6 +849,18 @@ impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<User
                 if x == 0 || y == 0
                 {
                     return;
+                }
+
+                {
+                    let info = self.info_mut();
+                    if let Some(app) = info.user_app.as_mut()
+                    {
+                        if app.early_exit()
+                        {
+                            info.exit();
+                            event_loop.exit();
+                        }
+                    }
                 }
 
                 handle_redraw(self.info.as_mut().unwrap(), &mut self.app_init);
