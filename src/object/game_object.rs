@@ -76,6 +76,16 @@ impl ObjectCreateInfo<'_>
     {
         self.projection_view = camera.projection_view();
     }
+
+    pub fn with_projection(&mut self, projection: Matrix4<f32>, mut f: impl FnMut(&mut Self))
+    {
+        let previous = self.projection_view;
+        self.projection_view = projection;
+
+        f(self);
+
+        self.projection_view = previous;
+    }
 }
 
 pub struct InitPartialInfo<'a, T>
