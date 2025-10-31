@@ -1,8 +1,10 @@
-use std::{fs, rc::Rc};
+use std::{fs, borrow::Cow, rc::Rc};
 
 use nalgebra::Vector2;
 
 use ab_glyph::FontVec;
+
+use serde::{Serialize, Deserialize};
 
 use crate::{
     ObjectFactory,
@@ -51,7 +53,7 @@ impl FontsContainer
         TextObject::text_height(self.default_font(), font_size, screen_height)
     }
 
-    pub fn calculate_bounds(&self, info: TextInfo, size: &Vector2<f32>) -> Vector2<f32>
+    pub fn calculate_bounds(&self, info: &TextInfo, size: &Vector2<f32>) -> Vector2<f32>
     {
         TextObject::calculate_bounds(info, self.default_font(), size)
     }
@@ -77,10 +79,57 @@ impl FontsContainer
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextOutline
+{
+    pub color: [u8; 3],
+    pub size: u8
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextInfoBlock<'a>
+{
+    pub color: [u8; 3],
+    pub text: Cow<'a, str>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextBlocks<'a>(pub Vec<TextInfoBlock<'a>>);
+
+impl<'a> TextBlocks<'a>
+{
+    pub fn single(color: [u8; 3], text: Cow<'a, str>) -> Self
+    {
+        Self(vec![TextInfoBlock{color, text}])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextInfo<'a>
 {
     pub font_size: u32,
-    pub text: &'a str
+    pub text: TextBlocks<'a>,
+    pub outline: Option<TextOutline>
+}
+
+impl<'a> Default for TextInfo<'a>
+{
+    fn default() -> Self
+    {
+        Self{
+            font_size: 16,
+            text: TextBlocks(Vec::new()),
+            outline: None
+        }
+    }
+}
+
+impl<'a> TextInfo<'a>
+{
+    pub fn new_simple(font_size: u32, text: impl Into<Cow<'a, str>>) -> Self
+    {
+        Self{font_size, text: TextBlocks::single([255; 3], text.into()), outline: None}
+    }
 }
 
 pub struct TextFactory<'a, 'b: 'a>

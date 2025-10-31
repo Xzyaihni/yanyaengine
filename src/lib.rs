@@ -43,7 +43,7 @@ pub use solid_object::SolidObject;
 pub use occluding_plane::{OccluderPoints, OccludingPlane};
 
 pub use text_object::TextObject;
-pub use text_factory::{TextInfo, TextCreateInfo, FontsContainer};
+pub use text_factory::{TextInfo, TextBlocks, TextInfoBlock, TextOutline, TextCreateInfo, FontsContainer};
 
 pub use nalgebra::Vector3;
 pub use winit::{

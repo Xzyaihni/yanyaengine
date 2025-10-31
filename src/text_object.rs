@@ -13,6 +13,7 @@ use crate::{
     Object,
     ObjectFactory,
     TextInfo,
+    TextOutline,
     ObjectInfo,
     transform::{TransformContainer, Transform},
     game_object::*,
@@ -78,7 +79,8 @@ impl BoundsCalculator
 
 struct CharInfo
 {
-    glyph: Glyph
+    glyph: Glyph,
+    color: [u8; 3]
 }
 
 struct ProcessedInfo
@@ -105,7 +107,7 @@ impl TextObject
     ) -> Self
     {
         let font = font.with_font_size(info.inner.font_size);
-        let ProcessedInfo{chars: chars_info, bounds} = Self::process_text(info.inner, &font);
+        let ProcessedInfo{chars: chars_info, bounds} = Self::process_text(&info.inner, &font);
 
         let global_size = Self::bounds_to_global(screen_size, bounds);
 
@@ -123,10 +125,20 @@ impl TextObject
             bounds.y.ceil() as usize
         );
 
-        chars_info.into_iter().for_each(|info|
+        let outline = info.inner.outline;
+
         {
-            font.render(&mut image, info);
-        });
+            let outline = outline.map(|x| x.size as usize).unwrap_or(0);
+            chars_info.into_iter().for_each(|info|
+            {
+                font.render(&mut image, outline, info);
+            });
+        }
+
+        if let Some(outline) = outline
+        {
+            Self::draw_outline(&mut image, outline);
+        }
 
         let texture = Texture::new(resource_uploader, image.into());
 
@@ -142,31 +154,116 @@ impl TextObject
         }
     }
 
+    fn draw_outline(image: &mut SimpleImage, outline: TextOutline)
+    {
+        let width = image.width;
+        let height = image.height;
+
+        let mut horizontal_outline = vec![0_u32; width * height];
+
+        let size = outline.size as usize;
+        let twice_size = size * 2;
+
+        if size == 0
+        {
+            return;
+        }
+
+        let index = move |x, y| y * width + x;
+
+        (0..height).for_each(|y|
+        {
+            (0..width).for_each(|x|
+            {
+                let value: u32 = (0..twice_size + 1).map(|i|
+                {
+                    if let Some(x) = (x + i).checked_sub(size)
+                    {
+                        if x < width
+                        {
+                            return image.get_pixel(x, y).a as u32;
+                        }
+                    }
+
+                    0
+                }).sum();
+
+                horizontal_outline[index(x, y)] += value;
+            });
+        });
+
+        let mut outline_mask = vec![0_u32; width * height];
+
+        (0..height).for_each(|y|
+        {
+            (0..width).for_each(|x|
+            {
+                let value: u32 = (0..twice_size + 1).map(|i|
+                {
+                    if let Some(y) = (y + i).checked_sub(size)
+                    {
+                        if y < height
+                        {
+                            return horizontal_outline[index(x, y)];
+                        }
+                    }
+
+                    0
+                }).sum();
+
+                outline_mask[index(x, y)] += value;
+            });
+        });
+
+        let mut final_image = SimpleImage::filled(Color{r: 0, g: 0, b: 0, a: 0}, width, height);
+
+        let [r, g, b] = outline.color;
+        (0..height).for_each(|y|
+        {
+            (0..width).for_each(|x|
+            {
+                let this_a = outline_mask[index(x, y)].min(255) as u8;
+
+                let other_pixel = image.get_pixel(x, y);
+
+                final_image.set_pixel(Color{r, g, b, a: this_a}.blend(other_pixel), x, y);
+            });
+        });
+
+        *image = final_image;
+    }
+
     fn process_text(
-        info: TextInfo,
+        info: &TextInfo,
         font: &CharsRasterizerScaled
     ) -> ProcessedInfo
     {
         let mut full_bounds = BoundsCalculator::new(font.font.height() + font.font.line_gap());
 
-        let chars: Vec<_> = info.text.lines().enumerate().flat_map(|(index, line)|
-        {
-            if index != 0
-            {
-                full_bounds.return_carriage();
-            }
+        let mut chars: Vec<_> = Vec::new();
 
-            // i dunno how to not collect >_<
-            iter::repeat(None).chain(line.chars().map(Some)).zip(line.chars()).map(|(last, c)|
+        info.text.0.iter().for_each(|text|
+        {
+            text.text.lines().enumerate().for_each(|(index, line)|
             {
-                font.bounds(&mut full_bounds, last, c)
-            }).collect::<Vec<_>>()
-        }).collect();
+                if index != 0
+                {
+                    full_bounds.return_carriage();
+                }
+
+                chars.extend(iter::repeat(None).chain(line.chars().map(Some)).zip(line.chars()).map(|(last, c)|
+                {
+                    font.bounds(&mut full_bounds, text.color, last, c)
+                }));
+            });
+        });
 
         let height = full_bounds.height;
         let width = full_bounds.width;
 
-        ProcessedInfo{chars, bounds: Vector2::new(width, height)}
+        let outline_size = info.outline.map(|x| Vector2::repeat(x.size as f32 * 2.0)).unwrap_or_default();
+
+        ProcessedInfo{chars, bounds: Vector2::new(width, height) + outline_size}
     }
 
     fn bounds_to_global(size: &Vector2<f32>, bounds: Vector2<f32>) -> Vector2<f32>
@@ -184,7 +281,7 @@ impl TextObject
     }
 
     pub fn calculate_bounds(
-        info: TextInfo,
+        info: &TextInfo,
         font: &CharsRasterizer,
         screen_size: &Vector2<f32>
     ) -> Vector2<f32>
@@ -255,7 +352,13 @@ struct CharsRasterizerScaled<'a>
 
 impl CharsRasterizerScaled<'_>
 {
-    fn bounds(&self, bounds_calculator: &mut BoundsCalculator, last: Option<char>, c: char) -> CharInfo
+    fn bounds(
+        &self,
+        bounds_calculator: &mut BoundsCalculator,
+        color: [u8; 3],
+        last: Option<char>,
+        c: char
+    ) -> CharInfo
     {
         let glyph_id = self.font.glyph_id(c);
         let mut glyph = self.font.scaled_glyph(c);
@@ -275,7 +378,7 @@ impl CharsRasterizerScaled<'_>
 
         glyph.position = Point{x: offset.x, y: offset.y};
 
-        CharInfo{glyph}
+        CharInfo{glyph, color}
     }
 
     fn height(&self) -> f32
@@ -283,7 +386,7 @@ impl CharsRasterizerScaled<'_>
         self.font.scale.y
     }
 
-    fn render(&self, image: &mut SimpleImage, info: CharInfo)
+    fn render(&self, image: &mut SimpleImage, outline: usize, info: CharInfo)
     {
         let ascent = self.font.ascent();
 
@@ -295,15 +398,16 @@ impl CharsRasterizerScaled<'_>
 
             outlined.draw(|x, y, amount|
             {
-                let x = (pos.x + x as f32) as usize;
-                let y = (pos.y + y as f32 + ascent) as usize;
+                let x = (pos.x + x as f32) as usize + outline;
+                let y = (pos.y + y as f32 + ascent) as usize + outline;
 
                 if !((0..image.width).contains(&x) && (0..image.height).contains(&y))
                 {
                     return;
                 }
 
-                let color = Color{r: 255, g: 255, b: 255, a: (amount * 255.0) as u8};
+                let [r, g, b] = info.color;
+                let color = Color{r, g, b, a: (amount * 255.0) as u8};
                 image.set_pixel(color, x, y);
             });
         }

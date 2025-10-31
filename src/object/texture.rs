@@ -36,6 +36,11 @@ use crate::{game_object::*, UniformLocation, ShaderId};
 use super::resource_uploader::ResourceUploader;
 
 
+pub fn lerp(a: f32, b: f32, t: f32) -> f32
+{
+    a * (1.0 - t) + b * t
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Color
 {
@@ -62,6 +67,11 @@ impl Color
             return self;
         }
 
+        if other.a == u8::MAX
+        {
+            return other;
+        }
+
         let to_f = |x|
         {
             x as f32 / 255.0
@@ -74,11 +84,6 @@ impl Color
 
         // or u could express this as lerp(self.alpha, 1.0, other.alpha)
         let alpha = (to_f(other.a) + to_f(self.a) * (1.0 - to_f(other.a))).clamp(0.0, 1.0);
-
-        fn lerp(a: f32, b: f32, t: f32) -> f32
-        {
-            a * (1.0 - t) + b * t
-        }
 
         let mix = |a, b|
         {
