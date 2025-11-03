@@ -10,7 +10,7 @@ use crate::{
     ObjectFactory,
     TextObject,
     text_object::CharsRasterizer,
-    object::resource_uploader::ResourceUploader
+    object::{texture::ImageOutline, resource_uploader::ResourceUploader}
 };
 
 pub use crate::text_object::TextCreateInfo;
@@ -79,12 +79,7 @@ impl FontsContainer
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TextOutline
-{
-    pub color: [u8; 3],
-    pub size: u8
-}
+pub type TextOutline = ImageOutline;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextInfoBlock<'a>

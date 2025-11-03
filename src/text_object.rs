@@ -13,14 +13,13 @@ use crate::{
     Object,
     ObjectFactory,
     TextInfo,
-    TextOutline,
     ObjectInfo,
     transform::{TransformContainer, Transform},
     game_object::*,
     object::{
         resource_uploader::ResourceUploader,
         model::Model,
-        texture::{Texture, Color, SimpleImage}
+        texture::{outline_image, Texture, Color, SimpleImage}
     }
 };
 
@@ -137,7 +136,10 @@ impl TextObject
 
         if let Some(outline) = outline
         {
-            Self::draw_outline(&mut image, outline);
+            if let Some(outlined) = outline_image::<false>(&image, outline)
+            {
+                image = outlined;
+            }
         }
 
         let texture = Texture::new(resource_uploader, image.into());
@@ -152,85 +154,6 @@ impl TextObject
             object: Some(object),
             size: global_size
         }
-    }
-
-    fn draw_outline(image: &mut SimpleImage, outline: TextOutline)
-    {
-        let width = image.width;
-        let height = image.height;
-
-        let mut horizontal_outline = vec![0_u32; width * height];
-
-        let size = outline.size as usize;
-        let twice_size = size * 2;
-
-        if size == 0
-        {
-            return;
-        }
-
-        let index = move |x, y| y * width + x;
-
-        (0..height).for_each(|y|
-        {
-            (0..width).for_each(|x|
-            {
-                let value: u32 = (0..twice_size + 1).map(|i|
-                {
-                    if let Some(x) = (x + i).checked_sub(size)
-                    {
-                        if x < width
-                        {
-                            return image.get_pixel(x, y).a as u32;
-                        }
-                    }
-
-                    0
-                }).sum();
-
-                horizontal_outline[index(x, y)] += value;
-            });
-        });
-
-        let mut outline_mask = vec![0_u32; width * height];
-
-        (0..height).for_each(|y|
-        {
-            (0..width).for_each(|x|
-            {
-                let value: u32 = (0..twice_size + 1).map(|i|
-                {
-                    if let Some(y) = (y + i).checked_sub(size)
-                    {
-                        if y < height
-                        {
-                            return horizontal_outline[index(x, y)];
-                        }
-                    }
-
-                    0
-                }).sum();
-
-                outline_mask[index(x, y)] += value;
-            });
-        });
-
-        let mut final_image = SimpleImage::filled(Color{r: 0, g: 0, b: 0, a: 0}, width, height);
-
-        let [r, g, b] = outline.color;
-        (0..height).for_each(|y|
-        {
-            (0..width).for_each(|x|
-            {
-                let this_a = outline_mask[index(x, y)].min(255) as u8;
-
-                let other_pixel = image.get_pixel(x, y);
-
-                final_image.set_pixel(Color{r, g, b, a: this_a}.blend(other_pixel), x, y);
-            });
-        });
-
-        *image = final_image;
     }
 
     fn process_text(

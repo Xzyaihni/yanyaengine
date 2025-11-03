@@ -7,6 +7,8 @@ use std::{
 
 use nalgebra::Vector2;
 
+use serde::{Serialize, Deserialize};
+
 use vulkano::{
     format::Format,
     buffer::{Buffer, BufferUsage, BufferCreateInfo},
@@ -27,6 +29,7 @@ use vulkano::{
 };
 
 use image::{
+    Rgba,
     ColorType,
     DynamicImage,
     error::ImageError
@@ -41,6 +44,120 @@ pub fn lerp(a: f32, b: f32, t: f32) -> f32
     a * (1.0 - t) + b * t
 }
 
+pub trait Imageable
+{
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+
+    fn get_pixel(&self, x: usize, y: usize) -> Color;
+}
+
+impl Imageable for image::RgbaImage
+{
+    fn width(&self) -> usize { Self::width(self) as usize }
+    fn height(&self) -> usize { Self::height(self) as usize }
+
+    fn get_pixel(&self, x: usize, y: usize) -> Color
+    {
+        (*Self::get_pixel(self, x as u32, y as u32)).into()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageOutline
+{
+    pub color: [u8; 3],
+    pub size: u8
+}
+
+pub fn outline_image<const EXPAND_IMAGE: bool>(
+    image: &impl Imageable,
+    outline: ImageOutline
+) -> Option<SimpleImage>
+{
+    let original_width = image.width();
+    let original_height = image.height();
+
+    let size = outline.size as usize;
+    let twice_size = size * 2;
+
+    let width = if EXPAND_IMAGE { original_width + twice_size } else { original_width };
+    let height = if EXPAND_IMAGE { original_height + twice_size } else { original_height };
+
+    let mut horizontal_outline = vec![0_u32; width * original_height];
+
+    if size == 0
+    {
+        return None;
+    }
+
+    let index = move |x: usize, y: usize| y * width + x;
+
+    (0..original_height).for_each(|y|
+    {
+        (0..width).for_each(|x|
+        {
+            let value: u32 = (0..twice_size as i32 + 1).map(|i|
+            {
+                let x = x as i32 + i - if EXPAND_IMAGE { twice_size } else { size } as i32;
+                if (0..original_width as i32).contains(&x)
+                {
+                    return image.get_pixel(x as usize, y).a as u32;
+                }
+
+                0
+            }).sum();
+
+            horizontal_outline[index(x, y)] += value;
+        });
+    });
+
+    let mut outline_mask = vec![0_u32; width * height];
+
+    (0..height).for_each(|y|
+    {
+        (0..width).for_each(|x|
+        {
+            let value: u32 = (0..twice_size as i32 + 1).map(|i|
+            {
+                let y = y as i32 + i - if EXPAND_IMAGE { twice_size } else { size } as i32;
+                if (0..original_height as i32).contains(&y)
+                {
+                    return horizontal_outline[index(x, y as usize)];
+                }
+
+                0
+            }).sum();
+
+            outline_mask[index(x, y)] += value;
+        });
+    });
+
+    let [r, g, b] = outline.color;
+    Some(SimpleImage::from_fn(width, height, |i|
+    {
+        let x = i % width;
+        let y = i / width;
+
+        let this_a = outline_mask[index(x, y)].min(255) as u8;
+        let this_pixel = Color{r, g, b, a: this_a};
+
+        if EXPAND_IMAGE
+        {
+            if (size..original_width + size).contains(&x) && (size..original_height + size).contains(&y)
+            {
+                this_pixel.blend(image.get_pixel(x - size, y - size))
+            } else
+            {
+                this_pixel
+            }
+        } else
+        {
+            this_pixel.blend(image.get_pixel(x, y))
+        }
+    }))
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Color
 {
@@ -48,6 +165,14 @@ pub struct Color
     pub g: u8,
     pub b: u8,
     pub a: u8
+}
+
+impl From<Rgba<u8>> for Color
+{
+    fn from(Rgba([r, g, b, a]): Rgba<u8>) -> Self
+    {
+        Self{r, g, b, a}
+    }
 }
 
 impl Color
@@ -109,6 +234,14 @@ pub struct SimpleImage
     pub height: usize
 }
 
+impl Imageable for SimpleImage
+{
+    fn width(&self) -> usize { self.width }
+    fn height(&self) -> usize { self.height }
+
+    fn get_pixel(&self, x: usize, y: usize) -> Color { Self::get_pixel(self, x, y) }
+}
+
 #[allow(dead_code)]
 impl SimpleImage
 {
@@ -117,9 +250,14 @@ impl SimpleImage
         Self::new(vec![color; width * height], width, height)
     }
 
+    pub fn from_fn(width: usize, height: usize, f: impl Fn(usize) -> Color) -> Self
+    {
+        Self::new((0..(width * height)).map(f).collect(), width, height)
+    }
+
     pub fn new(colors: Vec<Color>, width: usize, height: usize) -> Self
     {
-        Self{colors,  width, height}
+        Self{colors, width, height}
     }
 
     pub fn load(filepath: impl AsRef<Path>) -> Result<Self, ImageError>
