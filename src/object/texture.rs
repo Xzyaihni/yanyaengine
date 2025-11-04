@@ -70,6 +70,8 @@ pub struct ImageOutline
     pub size: u8
 }
 
+// adapted from an algorithm for calculating signed distance fields
+// i didnt understand the third and fourth passes in the linear algorithm so im sure its not as efficient as it could be
 pub fn outline_image<const EXPAND_IMAGE: bool>(
     image: &impl Imageable,
     outline: ImageOutline
@@ -84,78 +86,132 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
     let width = if EXPAND_IMAGE { original_width + twice_size } else { original_width };
     let height = if EXPAND_IMAGE { original_height + twice_size } else { original_height };
 
-    let mut horizontal_outline = vec![0_u32; width * original_height];
-
     if size == 0
     {
         return None;
     }
 
-    let index = move |x: usize, y: usize| y * width + x;
-
-    (0..original_height).for_each(|y|
+    let max_distance = (width + height) as i32;
+    let mut vertical_outline: Box<[i32]> = vec![0_i32; original_width * height].into();
+    (0..original_width).for_each(|x|
     {
-        (0..width).for_each(|x|
+        let g = &mut vertical_outline;
+        let g_index = |x, y| y * original_width + x;
+
+        g[g_index(x, 0)] = max_distance;
+
+        (1..height).for_each(|y|
         {
-            let value: u32 = (0..twice_size as i32 + 1).map(|i|
+            if (!EXPAND_IMAGE || (size..original_height + size).contains(&y))
+                && image.get_pixel(x, if EXPAND_IMAGE { y - size } else { y }).a != 0
             {
-                let x = x as i32 + i - if EXPAND_IMAGE { twice_size } else { size } as i32;
-                if (0..original_width as i32).contains(&x)
-                {
-                    return image.get_pixel(x as usize, y).a as u32;
-                }
-
-                0
-            }).sum();
-
-            horizontal_outline[index(x, y)] += value;
-        });
-    });
-
-    let mut outline_mask = vec![0_u32; width * height];
-
-    (0..height).for_each(|y|
-    {
-        (0..width).for_each(|x|
-        {
-            let value: u32 = (0..twice_size as i32 + 1).map(|i|
-            {
-                let y = y as i32 + i - if EXPAND_IMAGE { twice_size } else { size } as i32;
-                if (0..original_height as i32).contains(&y)
-                {
-                    return horizontal_outline[index(x, y as usize)];
-                }
-
-                0
-            }).sum();
-
-            outline_mask[index(x, y)] += value;
-        });
-    });
-
-    let [r, g, b] = outline.color;
-    Some(SimpleImage::from_fn(width, height, |i|
-    {
-        let x = i % width;
-        let y = i / width;
-
-        let this_a = outline_mask[index(x, y)].min(255) as u8;
-        let this_pixel = Color{r, g, b, a: this_a};
-
-        if EXPAND_IMAGE
-        {
-            if (size..original_width + size).contains(&x) && (size..original_height + size).contains(&y)
-            {
-                this_pixel.blend(image.get_pixel(x - size, y - size))
+                g[g_index(x, y)] = 0;
             } else
             {
-                this_pixel
+                g[g_index(x, y)] = 1 + g[g_index(x, y - 1)];
             }
-        } else
+        });
+
+        (0..height - 1).rev().for_each(|y|
         {
-            this_pixel.blend(image.get_pixel(x, y))
+            if g[g_index(x, y + 1)] < g[g_index(x, y)]
+            {
+                g[g_index(x, y)] = 1 + g[g_index(x, y + 1)];
+            }
+        });
+    });
+
+    let value_to_color = {
+        let [r, g, b] = outline.color;
+
+        move |x, y, value: f32|
+        {
+            let this_a = ((1.0 - (value - size as f32).clamp(0.0, 1.0)) * 255.0) as u8;
+
+            let this_pixel = Color{r, g, b, a: this_a};
+
+            if EXPAND_IMAGE
+            {
+                if (size..original_width + size).contains(&x) && (size..original_height + size).contains(&y)
+                {
+                    this_pixel.blend(image.get_pixel(x - size, y - size))
+                } else
+                {
+                    this_pixel
+                }
+            } else
+            {
+                this_pixel.blend(image.get_pixel(x, y))
+            }
         }
-    }))
+    };
+
+    let colors: Vec<Color> = (0..height).flat_map(|y|
+    {
+        let y_index = y * original_width;
+        let vertical_outline = &vertical_outline;
+        let g = move |i: i32| -> i32
+        {
+            if !EXPAND_IMAGE || (size as i32..original_width as i32 + size as i32).contains(&i)
+            {
+                let index = if EXPAND_IMAGE { i as usize - size } else { i as usize };
+                vertical_outline[index + y_index]
+            } else
+            {
+                max_distance
+            }
+        };
+
+        let f = move |x: i32, i: i32|
+        {
+            (x - i).pow(2) + g(i).pow(2)
+        };
+
+        let sep = |i: i32, u: i32|
+        {
+            (u.pow(2) - i.pow(2) + g(u).pow(2) - g(i).pow(2)) / (2 * (u - i))
+        };
+
+        let mut q: i32 = 0;
+        let mut s = vec![0; width];
+        let mut t = vec![0; width];
+
+        (1..width).for_each(|u|
+        {
+            while q >= 0 && f(t[q as usize], s[q as usize]) > f(t[q as usize], u as i32)
+            {
+                q -= 1;
+            }
+
+            if q < 0
+            {
+                q = 0;
+                s[0] = u as i32;
+            } else
+            {
+                let w = 1 + sep(s[q as usize], u as i32);
+                if w < width as i32
+                {
+                    q += 1;
+                    s[q as usize] = u as i32;
+                    t[q as usize] = w;
+                }
+            }
+        });
+
+        (0..width).rev().map(move |u|
+        {
+            let value = f(u as i32, s[q as usize]);
+            if u as i32 == t[q as usize]
+            {
+                q -= 1;
+            }
+
+            value_to_color(u, y, (value as f32).sqrt())
+        }).collect::<Vec<_>>().into_iter().rev()
+    }).collect();
+
+    Some(SimpleImage::new(colors, width, height))
 }
 
 #[derive(Debug, Clone, Copy)]

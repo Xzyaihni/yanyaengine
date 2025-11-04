@@ -348,6 +348,11 @@ impl Assets
         }).unwrap_or_default()
     }
 
+    pub fn textures_path(&self) -> Option<&PathBuf>
+    {
+        self.textures_path.as_ref()
+    }
+
     pub fn default_model(&self, id: DefaultModel) -> ModelId
     {
         self.try_model_id(id.into()).unwrap()
