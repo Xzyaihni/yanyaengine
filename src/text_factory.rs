@@ -81,25 +81,25 @@ impl FontsContainer
 
 pub type TextOutline = ImageOutline;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TextInfoBlock<'a>
 {
     pub color: [u8; 3],
     pub text: Cow<'a, str>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TextBlocks<'a>(pub Vec<TextInfoBlock<'a>>);
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TextBlocks<'a>(pub Box<[TextInfoBlock<'a>]>);
 
 impl<'a> TextBlocks<'a>
 {
     pub fn single(color: [u8; 3], text: Cow<'a, str>) -> Self
     {
-        Self(vec![TextInfoBlock{color, text}])
+        Self(vec![TextInfoBlock{color, text}].into())
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TextInfo<'a>
 {
     pub font_size: u32,
@@ -113,7 +113,7 @@ impl<'a> Default for TextInfo<'a>
     {
         Self{
             font_size: 16,
-            text: TextBlocks(Vec::new()),
+            text: TextBlocks(Vec::new().into()),
             outline: None
         }
     }

@@ -63,7 +63,7 @@ impl Imageable for image::RgbaImage
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ImageOutline
 {
     pub color: [u8; 3],
