@@ -179,6 +179,11 @@ impl TextObject
                     font.bounds(&mut full_bounds, text.color, last, c)
                 }));
             });
+
+            if text.text.bytes().last() == Some(b'\n')
+            {
+                full_bounds.return_carriage();
+            }
         });
 
         let height = full_bounds.height;
