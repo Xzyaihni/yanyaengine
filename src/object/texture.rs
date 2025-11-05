@@ -70,8 +70,7 @@ pub struct ImageOutline
     pub size: u8
 }
 
-// adapted from an algorithm for calculating signed distance fields
-// i didnt understand the third and fourth passes in the linear algorithm so im sure its not as efficient as it could be
+// uses a linear algorithm for calculating signed distance
 pub fn outline_image<const EXPAND_IMAGE: bool>(
     image: &impl Imageable,
     outline: ImageOutline
@@ -91,8 +90,8 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
         return None;
     }
 
-    let max_distance = (width + height) as i32;
-    let mut vertical_outline: Box<[i32]> = vec![0_i32; original_width * height].into();
+    let max_distance = (width + height) as f32;
+    let mut vertical_outline: Box<[f32]> = vec![0.0; original_width * height].into();
     (0..original_width).for_each(|x|
     {
         let g = &mut vertical_outline;
@@ -102,13 +101,14 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
 
         (1..height).for_each(|y|
         {
-            if (!EXPAND_IMAGE || (size..original_height + size).contains(&y))
-                && image.get_pixel(x, if EXPAND_IMAGE { y - size } else { y }).a != 0
+            let get_pixel = || image.get_pixel(x, if EXPAND_IMAGE { y - size } else { y }).a;
+
+            if (!EXPAND_IMAGE || (size..original_height + size).contains(&y)) && get_pixel() != 0
             {
-                g[g_index(x, y)] = 0;
+                g[g_index(x, y)] = 1.0 - get_pixel() as f32 / 255.0;
             } else
             {
-                g[g_index(x, y)] = 1 + g[g_index(x, y - 1)];
+                g[g_index(x, y)] = 1.0 + g[g_index(x, y - 1)];
             }
         });
 
@@ -116,7 +116,7 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
         {
             if g[g_index(x, y + 1)] < g[g_index(x, y)]
             {
-                g[g_index(x, y)] = 1 + g[g_index(x, y + 1)];
+                g[g_index(x, y)] = 1.0 + g[g_index(x, y + 1)];
             }
         });
     });
@@ -150,7 +150,7 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
     {
         let y_index = y * original_width;
         let vertical_outline = &vertical_outline;
-        let g = move |i: i32| -> i32
+        let g = move |i: i32| -> f32
         {
             if !EXPAND_IMAGE || (size as i32..original_width as i32 + size as i32).contains(&i)
             {
@@ -162,14 +162,14 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
             }
         };
 
-        let f = move |x: i32, i: i32|
+        let f = move |x: i32, i: i32| -> f32
         {
-            (x - i).pow(2) + g(i).pow(2)
+            (x - i).pow(2) as f32 + g(i).powi(2)
         };
 
-        let sep = |i: i32, u: i32|
+        let sep = |i: i32, u: i32| -> f32
         {
-            (u.pow(2) - i.pow(2) + g(u).pow(2) - g(i).pow(2)) / (2 * (u - i))
+            ((u.pow(2) - i.pow(2)) as f32 + (g(u).powi(2) - g(i).powi(2))) / (2 * (u - i)) as f32
         };
 
         let mut q: i32 = 0;
@@ -189,7 +189,7 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
                 s[0] = u as i32;
             } else
             {
-                let w = 1 + sep(s[q as usize], u as i32);
+                let w = 1 + sep(s[q as usize], u as i32) as i32;
                 if w < width as i32
                 {
                     q += 1;
@@ -207,7 +207,7 @@ pub fn outline_image<const EXPAND_IMAGE: bool>(
                 q -= 1;
             }
 
-            value_to_color(u, y, (value as f32).sqrt())
+            value_to_color(u, y, value.sqrt())
         }).collect::<Vec<_>>().into_iter().rev()
     }).collect();
 
