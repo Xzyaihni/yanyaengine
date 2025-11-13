@@ -532,7 +532,7 @@ pub struct GraphicsInfo<App, T>
     pub rendering: Rendering<App, T>
 }
 
-pub type ThisCommandBufferAllocator = Arc<(dyn CommandBufferAllocator + 'static)>;
+pub type ThisCommandBufferAllocator = Arc<dyn CommandBufferAllocator + 'static>;
 
 // stupid code duplication but im lazy wutever
 struct HandleEventInfoRaw<App, T>
