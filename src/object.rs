@@ -242,7 +242,7 @@ impl GameObject for Object
             return;
         }
 
-        let descriptor_set = self.texture.lock().descriptor_set(info, UniformLocation{set: 0, binding: 0});
+        let descriptor_set = self.texture.lock().descriptor_set(info, UniformLocation{set: info.current_sets.len() as u32, binding: 0});
 
         self.assert_updated(&info.object_info);
 
