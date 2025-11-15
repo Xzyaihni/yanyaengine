@@ -588,14 +588,18 @@ impl Texture
         self.descriptor_sets.clear();
     }
 
-    pub fn descriptor_set(&mut self, info: &DrawInfo) -> Arc<DescriptorSet>
+    pub fn descriptor_set(
+        &mut self,
+        info: &DrawInfo,
+        location: UniformLocation
+    ) -> Arc<DescriptorSet>
     {
         let current = (
             info.current_pipeline_id().unwrap_or_else(||
             {
                 panic!("tried to get current pipeline without a pipeline bound")
             }),
-            UniformLocation{set: 0, binding: 0}
+            location
         );
 
         self.descriptor_sets.entry(current).or_insert_with(||

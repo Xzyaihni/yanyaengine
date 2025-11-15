@@ -19,6 +19,7 @@ use vulkano::{
 use nalgebra::{Vector3, Vector4, Matrix4};
 
 use crate::{
+    UniformLocation,
     allocators::ObjectAllocator,
     transform::{Transform, OnTransformCallback, TransformContainer}
 };
@@ -241,7 +242,7 @@ impl GameObject for Object
             return;
         }
 
-        let descriptor_set = self.texture.lock().descriptor_set(info);
+        let descriptor_set = self.texture.lock().descriptor_set(info, UniformLocation{set: 0, binding: 0});
 
         self.assert_updated(&info.object_info);
 
