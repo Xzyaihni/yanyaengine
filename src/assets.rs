@@ -165,6 +165,7 @@ impl From<ModelId> for usize
 struct IdsStorage<I, T>
 {
     ids: HashMap<String, I>,
+    names: Vec<Option<String>>,
     data: Vec<T>
 }
 
@@ -200,7 +201,7 @@ impl<I, T> Default for IdsStorage<I, T>
 {
     fn default() -> Self
     {
-        Self{ids: HashMap::new(), data: Vec::new()}
+        Self{ids: HashMap::new(), names: Vec::new(), data: Vec::new()}
     }
 }
 
@@ -212,7 +213,11 @@ impl<I, T> IdsStorage<I, T>
     {
         let id: I = self.data.len().into();
 
-        self.ids.insert(item.0.replace('\\', "/"), id.clone());
+        let name = item.0.replace('\\', "/");
+
+        self.ids.insert(name.clone(), id.clone());
+
+        self.names.push(Some(name));
         self.data.push(item.1);
 
         id
@@ -224,9 +229,17 @@ impl<I, T> IdsStorage<I, T>
     {
         let id: I = self.data.len().into();
 
+        self.names.push(None);
         self.data.push(item);
 
         id
+    }
+
+    pub fn get_name(&self, id: I) -> &Option<String>
+    where
+        I: Into<usize>
+    {
+        &self.names[id.into()]
     }
 
     pub fn get_id(&self, name: &str) -> Option<&I>
@@ -393,6 +406,11 @@ impl Assets
         &self.textures[id]
     }
 
+    pub fn texture_name(&self, id: TextureId) -> &Option<String>
+    {
+        self.textures.get_name(id)
+    }
+
     pub fn try_model_id(&self, name: &str) -> Option<ModelId>
     {
         self.models.get_id(name).copied()
@@ -423,6 +441,11 @@ impl Assets
         &self.models[id]
     }
 
+    pub fn model_name(&self, id: ModelId) -> &Option<String>
+    {
+        self.models.get_name(id)
+    }
+
     pub fn edited_copy(
         &mut self,
         builder_wrapper: &mut BuilderWrapper,
@@ -430,10 +453,29 @@ impl Assets
         f: impl FnOnce(&mut SimpleImage)
     ) -> TextureId
     {
-        let textures_path = self.textures_path.as_ref().expect("cant edit empty assets");
+        let textures_path = if let Some(x) = self.textures_path.as_ref()
+        {
+            x
+        } else
+        {
+            eprintln!("cant edit empty assets, returning fallback");
+
+            return self.default_texture(DefaultTexture::Solid);
+        };
+
         let filepath = textures_path.join(name);
 
-        let mut image = SimpleImage::load(&filepath).unwrap();
+        let mut image = match SimpleImage::load(&filepath)
+        {
+            Ok(x) => x,
+            Err(err) =>
+            {
+                eprintln!("cant load file `{}` ({err}), returning fallback", filepath.display());
+
+                return self.default_texture(DefaultTexture::Solid);
+            }
+        };
+
         f(&mut image);
 
         let texture = builder_wrapper.create_texture(image.into());
