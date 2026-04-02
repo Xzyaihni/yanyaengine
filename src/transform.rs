@@ -6,15 +6,12 @@ use nalgebra::{
 };
 
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, bincode::Decode, bincode::Encode)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transform
 {
 	pub rotation: f32,
-    #[bincode(with_serde)]
 	pub position: Vector3<f32>,
-    #[bincode(with_serde)]
 	pub scale: Vector3<f32>,
-    #[bincode(with_serde)]
 	pub stretch: (f32, Vector2<f32>)
 }
 

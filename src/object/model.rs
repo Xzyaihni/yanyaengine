@@ -23,7 +23,7 @@ pub enum ParseErrorKind
 
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, EnumIter, bincode::Decode, bincode::Encode)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
 pub enum Uvs
 {
     Normal,

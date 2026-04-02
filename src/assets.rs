@@ -124,7 +124,7 @@ impl FilesLoader
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize, bincode::Decode, bincode::Encode)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TextureId(usize);
 
 impl From<usize> for TextureId
@@ -143,7 +143,7 @@ impl From<TextureId> for usize
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize, bincode::Decode, bincode::Encode)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ModelId(usize);
 
 impl From<usize> for ModelId
