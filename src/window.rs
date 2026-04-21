@@ -863,9 +863,14 @@ impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<User
                     }
                 }
 
-                handle_redraw(self.info.as_mut().unwrap(), &mut self.app_init);
-
-                self.info().render_info.window().request_redraw();
+                if handle_redraw(self.info.as_mut().unwrap(), &mut self.app_init)
+                {
+                    self.info().render_info.window().request_redraw();
+                } else
+                {
+                    self.info_mut().exit();
+                    event_loop.exit();
+                }
             },
             WindowEvent::Resized(_) => self.info_mut().window_resized = true,
             WindowEvent::CursorMoved{position, ..} =>
@@ -952,13 +957,21 @@ impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<User
 fn handle_redraw<UserApp: YanyaApp + 'static>(
     info: &mut HandleEventInfo<UserApp, UserApp::SetupInfo>,
     app_init: &mut Option<UserApp::AppInfo>
-)
+) -> bool
 {
-    let mut builder = AutoCommandBufferBuilder::primary(
+    let mut builder = match AutoCommandBufferBuilder::primary(
         info.command_allocator.clone(),
         info.queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit
-    ).unwrap();
+    )
+    {
+        Ok(x) => x,
+        Err(err) =>
+        {
+            eprintln!("error creating command buffer: {err}");
+            return false;
+        }
+    };
 
     if info.recreate_swapchain || (info.initialized && info.window_resized)
     {
@@ -967,12 +980,16 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
         match info.render_info.recreate(info.window_resized)
         {
             Ok(_) => (),
-            Err(e) => panic!("couldnt recreate swapchain ; -; ({e})")
+            Err(err) =>
+            {
+                eprintln!("couldnt recreate swapchain ; -; ({err})");
+                return false;
+            }
         }
 
         if !info.initialized
         {
-            return;
+            return true;
         }
 
         let resource_uploader = info.render_info.resource_uploader(&mut builder);
@@ -987,7 +1004,11 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
         info.window_resized = false;
     }
 
-    builder.set_scissor(0, vec![Scissor::default()].into()).unwrap();
+    if let Err(err) = builder.set_scissor(0, vec![Scissor::default()].into())
+    {
+        eprintln!("error setting default scissor: {err}");
+        return false;
+    }
 
     let acquired =
         match swapchain::acquire_next_image(info.render_info.swapchain.clone(), None)
@@ -997,15 +1018,16 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             {
                 None
             },
-            Err(e) =>
+            Err(err) =>
             {
-                let e = match e
+                let err = match err
                 {
                     Validated::Error(x) => format!("{x}"),
                     Validated::ValidationError(x) => format!("error validating {x}")
                 };
 
-                panic!("error getting next image: ({e})")
+                eprintln!("error getting next image: {err}");
+                return false;
             }
         };
 
@@ -1031,12 +1053,12 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
                         &info.render_info.setup
                     );
 
-                let app_init = if let Some(x) = app_init.take() { x } else { return; };
+                let app_init = if let Some(x) = app_init.take() { x } else { return true; };
                 Some(UserApp::init(init_info, app_init))
             };
         } else if info.user_app.is_none()
         {
-            return;
+            return true;
         }
 
         let run_frame_info = RunFrameInfo
@@ -1051,10 +1073,19 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
 
         info.frame_parity = !info.frame_parity;
 
-        let command_buffer = run_frame(
-            run_frame_info,
-            info.user_app.as_mut().unwrap()
-        );
+        let command_buffer = match run_frame(run_frame_info, info.user_app.as_mut().unwrap())
+        {
+            Ok(x) => x,
+            Err(err) =>
+            {
+                if !info.user_app.as_ref().unwrap().early_exit()
+                {
+                    eprintln!("error running frame: {err}");
+                }
+
+                return false;
+            }
+        };
 
         if let Some(fence) = info.fence.as_mut()
         {
@@ -1073,6 +1104,8 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             }
         );
     }
+
+    true
 }
 
 type FutureInner = PresentFuture<CommandBufferExecFuture<SwapchainAcquireFuture>>;
@@ -1098,7 +1131,7 @@ struct RunFrameInfo<'a, App, T>
 fn run_frame<UserApp: YanyaApp, T: Clone>(
     mut frame_info: RunFrameInfo<UserApp, T>,
     user_app: &mut UserApp
-) -> Arc<PrimaryAutoCommandBuffer>
+) -> Result<Arc<PrimaryAutoCommandBuffer>, Validated<VulkanError>>
 {
     let delta_time = frame_info.previous_time.elapsed().as_secs_f32();
     *frame_info.previous_time = Instant::now();
@@ -1125,8 +1158,7 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
                 contents: SubpassContents::Inline,
                 ..Default::default()
             }
-        )
-        .unwrap();
+        )?;
 
     {
         let object_create_info = frame_info.engine
@@ -1145,11 +1177,11 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
         user_app.draw(draw_info);
     }
 
-    frame_info.builder.end_render_pass(Default::default()).unwrap();
+    frame_info.builder.end_render_pass(Default::default())?;
 
     user_app.render_pass_ended(&mut frame_info.builder);
 
-    frame_info.builder.build().unwrap()
+    frame_info.builder.build()
 }
 
 fn execute_builder(
