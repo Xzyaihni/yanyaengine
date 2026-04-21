@@ -545,6 +545,10 @@ impl<App, T: Clone> RenderInfo<App, T>
     pub fn set_present_mode(&mut self, new_present_mode: PresentMode)
     {
         self.present_mode = available_present_mode(&self.available_present_modes, new_present_mode);
+        if let Err(err) = self.recreate(false)
+        {
+            eprintln!("error recreating engine info: {}", format_vulkan_error(err));
+        }
     }
 
     pub fn size(&self) -> [f32; 2]
