@@ -1,6 +1,8 @@
 #![allow(clippy::suspicious_else_formatting)]
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::new_without_default)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::type_complexity)]
 
 use std::{
     fmt::Display,
@@ -11,6 +13,7 @@ use std::{
 
 use vulkano::{
     buffer::subbuffer::BufferContents,
+    swapchain::PresentMode,
     pipeline::{
         PipelineShaderStageCreateInfo,
         graphics::{
@@ -125,6 +128,13 @@ impl From<([f32; 4], [f32; 2])> for SimpleVertex
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum EngineEvent
+{
+    Exit,
+    SetPresentMode(PresentMode)
+}
+
 pub trait YanyaApp
 where
     Self: Sized
@@ -144,7 +154,7 @@ where
 
     fn resize(&mut self, _aspect: f32) {}
 
-    fn early_exit(&self) -> bool { false }
+    fn take_engine_event(&mut self) -> Option<EngineEvent> { None }
 
     fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
 

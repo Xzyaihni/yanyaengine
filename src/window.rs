@@ -54,6 +54,7 @@ use vulkano::{
         SurfaceCapabilities,
         CompositeAlpha,
         PresentFuture,
+        PresentMode,
         Swapchain,
         SwapchainAcquireFuture,
         SwapchainCreateInfo,
@@ -99,6 +100,7 @@ use winit::{
 };
 
 use crate::{
+    EngineEvent,
     YanyaApp,
     AppOptions,
     Control,
@@ -108,6 +110,47 @@ use crate::{
     object::resource_uploader::ResourceUploader
 };
 
+
+fn format_vulkan_error(err: Validated<VulkanError>) -> String
+{
+    match err
+    {
+        Validated::Error(x) => format!("{x}"),
+        Validated::ValidationError(x) => format!("(validation error) {x}")
+    }
+}
+
+fn available_present_mode(
+    available: &[PresentMode],
+    mode: PresentMode
+) -> PresentMode
+{
+    if available.contains(&mode)
+    {
+        mode
+    } else
+    {
+        let f = |m: &PresentMode|
+        {
+            match m
+            {
+                PresentMode::Immediate => "immediate",
+                PresentMode::Mailbox => "mailbox",
+                PresentMode::Fifo => "fifo",
+                PresentMode::FifoRelaxed => "fifo_relaxed",
+                _ => "unknown"
+            }
+        };
+
+        eprintln!(
+            "present mode `{}` is not supported (available: [{}])",
+            f(&mode),
+            available.iter().map(f).map(str::to_owned).reduce(|acc, x| acc + ", " + &x).unwrap_or_default()
+        );
+
+        PresentMode::Fifo
+    }
+}
 
 pub struct PipelineInfo
 {
@@ -146,6 +189,7 @@ pub struct Rendering<App, T>
     pub setup: Box<dyn FnOnce(Arc<Device>) -> T>,
     pub attachments: AttachmentCreator<T>,
     pub render_pass: RenderPassCreator<T>,
+    pub present_mode: PresentMode,
     pub clear: Box<dyn Fn(&App) -> Vec<Option<ClearValue>>>
 }
 
@@ -203,6 +247,7 @@ impl<App> Rendering<App, ()>
             setup: Box::new(|_| {}),
             attachments,
             render_pass,
+            present_mode: PresentMode::Fifo,
             clear: Box::new(move |_app| vec![Some(clear_color), Some(1.0.into())])
         }
     }
@@ -227,6 +272,8 @@ struct RenderInfo<App, T>
     pub render_pass: Arc<RenderPass>,
     pub sampler: Arc<Sampler>,
     pub clear_values: Box<dyn Fn(&App) -> Vec<Option<ClearValue>>>,
+    available_present_modes: Vec<PresentMode>,
+    present_mode: PresentMode,
     pipeline_infos: Vec<PipelineCreateInfo>,
     pub memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
@@ -239,6 +286,7 @@ impl<App, T: Clone> RenderInfo<App, T>
     pub fn new(
         info: GraphicsInfo<App, T>,
         capabilities: SurfaceCapabilities,
+        available_present_modes: Vec<PresentMode>,
         image_format: Format,
         composite_alpha: CompositeAlpha
     ) -> Self
@@ -246,6 +294,7 @@ impl<App, T: Clone> RenderInfo<App, T>
         let device = info.device;
         let surface = info.surface;
         let pipeline_infos = info.pipeline_infos;
+        let present_mode = available_present_mode(&available_present_modes, info.rendering.present_mode);
 
         let sampler = Sampler::new(
             device.clone(),
@@ -272,6 +321,7 @@ impl<App, T: Clone> RenderInfo<App, T>
                 image_extent: dimensions.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST,
                 composite_alpha,
+                present_mode,
                 ..Default::default()
             }
         ).unwrap();
@@ -318,6 +368,8 @@ impl<App, T: Clone> RenderInfo<App, T>
             render_pass,
             sampler,
             clear_values: info.rendering.clear,
+            available_present_modes,
+            present_mode,
             pipeline_infos,
             memory_allocator,
             descriptor_allocator,
@@ -462,6 +514,7 @@ impl<App, T: Clone> RenderInfo<App, T>
 
         let (new_swapchain, new_images) = self.swapchain.recreate(SwapchainCreateInfo{
             image_extent: dimensions.into(),
+            present_mode: self.present_mode,
             ..self.swapchain.create_info()
         })?;
 
@@ -487,6 +540,11 @@ impl<App, T: Clone> RenderInfo<App, T>
         }
 
         Ok(())
+    }
+
+    pub fn set_present_mode(&mut self, new_present_mode: PresentMode)
+    {
+        self.present_mode = available_present_mode(&self.available_present_modes, new_present_mode);
     }
 
     pub fn size(&self) -> [f32; 2]
@@ -662,12 +720,15 @@ impl<UserApp: YanyaApp + 'static, T: Clone> InfoInit<UserApp, T>
             rendering: self.rendering
         };
 
+        let available_present_modes = info.physical_device
+            .surface_present_modes(&info.surface, Default::default())
+            .unwrap();
+
         let capabilities = info.physical_device
             .surface_capabilities(&info.surface, Default::default())
             .unwrap();
 
-        let composite_alpha =
-        {
+        let composite_alpha = {
             let supported = capabilities.supported_composite_alpha;
 
             let preferred = CompositeAlpha::Opaque;
@@ -698,6 +759,7 @@ impl<UserApp: YanyaApp + 'static, T: Clone> InfoInit<UserApp, T>
         let render_info = RenderInfo::new(
             info,
             capabilities,
+            available_present_modes,
             image_format,
             composite_alpha
         );
@@ -855,10 +917,19 @@ impl<UserApp: YanyaApp + 'static> ApplicationHandler for WindowEventHandler<User
                     let info = self.info_mut();
                     if let Some(app) = info.user_app.as_mut()
                     {
-                        if app.early_exit()
+                        while let Some(engine_event) = app.take_engine_event()
                         {
-                            info.exit();
-                            event_loop.exit();
+                            match engine_event
+                            {
+                                EngineEvent::Exit =>
+                                {
+                                    info.exit();
+                                    event_loop.exit();
+
+                                    break;
+                                },
+                                EngineEvent::SetPresentMode(present_mode) => info.render_info.set_present_mode(present_mode)
+                            }
                         }
                     }
                 }
@@ -968,7 +1039,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
         Ok(x) => x,
         Err(err) =>
         {
-            eprintln!("error creating command buffer: {err}");
+            eprintln!("error creating command buffer: {}", format_vulkan_error(err));
             return false;
         }
     };
@@ -982,7 +1053,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             Ok(_) => (),
             Err(err) =>
             {
-                eprintln!("couldnt recreate swapchain ; -; ({err})");
+                eprintln!("couldnt recreate swapchain: {}", format_vulkan_error(err));
                 return false;
             }
         }
@@ -1020,13 +1091,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             },
             Err(err) =>
             {
-                let err = match err
-                {
-                    Validated::Error(x) => format!("{x}"),
-                    Validated::ValidationError(x) => format!("error validating {x}")
-                };
-
-                eprintln!("error getting next image: {err}");
+                eprintln!("error getting next image: {}", format_vulkan_error(err));
                 return false;
             }
         };
@@ -1078,11 +1143,7 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
             Ok(x) => x,
             Err(err) =>
             {
-                if !info.user_app.as_ref().unwrap().early_exit()
-                {
-                    eprintln!("error running frame: {err}");
-                }
-
+                eprintln!("error running frame: {}", format_vulkan_error(err));
                 return false;
             }
         };
@@ -1217,15 +1278,9 @@ fn execute_builder(
             recreate_swapchain = true;
             None
         },
-        Err(e) =>
+        Err(err) =>
         {
-            let e = match e
-            {
-                Validated::Error(x) => format!("{x}"),
-                Validated::ValidationError(x) => format!("error validating {x}")
-            };
-
-            panic!("error flushing future: {e}")
+            panic!("error flushing future: {}", format_vulkan_error(err))
         }
     };
 
