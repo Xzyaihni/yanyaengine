@@ -37,7 +37,7 @@ pub struct OccludingPlane<VertexType=SimpleVertex>
     #[cfg(debug_assertions)]
     debug_points: OccluderPoints,
     #[cfg(debug_assertions)]
-    updated_buffers: Option<bool>
+    updated_buffers: Option<FrameParity>
 }
 
 #[allow(dead_code)]
@@ -202,7 +202,15 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
         let builder = info.partial.builder_wrapper.builder();
 
-        builder.update_buffer(self.subbuffer.clone(), vertices).unwrap();
+        #[cfg(debug_assertions)]
+        {
+            builder.update_buffer(self.subbuffer.clone(), vertices).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.update_buffer_unchecked(self.subbuffer.clone(), vertices); }
+        }
     }
 
     pub fn draw(&self, info: &mut DrawInfo)
@@ -218,21 +226,40 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
 
         let layout = info.current_layout();
 
-        unsafe{
-            info.object_info.builder_wrapper.builder()
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Graphics,
-                    layout,
-                    0,
-                    info.current_sets.clone()
-                )
-                .unwrap()
-                .bind_index_buffer(self.indices.clone())
-                .unwrap()
-                .bind_vertex_buffers(0, self.subbuffer.clone())
-                .unwrap()
-                .draw_indexed(square_indices, 1, 0, 0, 0)
-                .unwrap();
+        #[cfg(debug_assertions)]
+        {
+            unsafe{
+                info.object_info.builder_wrapper.builder()
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        layout,
+                        0,
+                        info.current_sets.clone()
+                    )
+                    .unwrap()
+                    .bind_index_buffer(self.indices.clone())
+                    .unwrap()
+                    .bind_vertex_buffers(0, self.subbuffer.clone())
+                    .unwrap()
+                    .draw_indexed(square_indices, 1, 0, 0, 0)
+                    .unwrap();
+            }
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{
+                info.object_info.builder_wrapper.builder()
+                    .bind_descriptor_sets_unchecked(
+                        PipelineBindPoint::Graphics,
+                        layout,
+                        0,
+                        info.current_sets.clone()
+                    )
+                    .bind_index_buffer_unchecked(self.indices.clone())
+                    .bind_vertex_buffers_unchecked(0, self.subbuffer.clone())
+                    .draw_indexed_unchecked(square_indices, 1, 0, 0, 0);
+            }
         }
     }
 

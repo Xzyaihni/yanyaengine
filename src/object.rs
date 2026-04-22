@@ -58,11 +58,25 @@ pub trait NormalGraphicalObject<T: BufferContents>
 
         self.set_updated(&info.partial);
 
-        info.partial.builder_wrapper.builder()
-            .update_buffer(
-                self.subbuffer(),
-                vertices
-            ).unwrap();
+        #[cfg(debug_assertions)]
+        {
+            info.partial.builder_wrapper.builder()
+                .update_buffer(
+                    self.subbuffer(),
+                    vertices
+                ).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{
+                info.partial.builder_wrapper.builder()
+                    .update_buffer_unchecked(
+                        self.subbuffer(),
+                        vertices
+                    );
+            }
+        }
     }
 }
 
@@ -86,7 +100,7 @@ macro_rules! impl_updated_check
             #[cfg(debug_assertions)]
             {
                 assert!(
-                    self.updated_buffers == Some(object_info.frame_parity),
+                    self.updated_buffers == Some(object_info.frame_parity) || self.updated_buffers == Some(FrameParity::Ignore),
                     "update_buffers wasnt called on {self:#?}"
                 );
             }
@@ -136,7 +150,7 @@ pub struct Object
     subbuffer: Subbuffer<[ObjectVertex]>,
     indices: Subbuffer<[u16]>,
     #[cfg(debug_assertions)]
-    updated_buffers: Option<bool>
+    updated_buffers: Option<FrameParity>
 }
 
 #[allow(dead_code)]
@@ -253,21 +267,40 @@ impl GameObject for Object
         let mut sets = info.current_sets.clone();
         sets.push(descriptor_set);
 
-        unsafe{
-            info.object_info.builder_wrapper.builder()
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Graphics,
-                    layout,
-                    0,
-                    sets
-                )
-                .unwrap()
-                .bind_index_buffer(self.indices.clone())
-                .unwrap()
-                .bind_vertex_buffers(0, self.subbuffer.clone())
-                .unwrap()
-                .draw_indexed(size, 1, 0, 0, 0)
-                .unwrap();
+        #[cfg(debug_assertions)]
+        {
+            unsafe{
+                info.object_info.builder_wrapper.builder()
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        layout,
+                        0,
+                        sets
+                    )
+                    .unwrap()
+                    .bind_index_buffer(self.indices.clone())
+                    .unwrap()
+                    .bind_vertex_buffers(0, self.subbuffer.clone())
+                    .unwrap()
+                    .draw_indexed(size, 1, 0, 0, 0)
+                    .unwrap();
+            }
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{
+                info.object_info.builder_wrapper.builder()
+                    .bind_descriptor_sets_unchecked(
+                        PipelineBindPoint::Graphics,
+                        layout,
+                        0,
+                        sets
+                    )
+                    .bind_index_buffer_unchecked(self.indices.clone())
+                    .bind_vertex_buffers_unchecked(0, self.subbuffer.clone())
+                    .draw_indexed_unchecked(size, 1, 0, 0, 0);
+            }
         }
     }
 }

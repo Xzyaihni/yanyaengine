@@ -30,7 +30,7 @@ pub struct SolidObject<VertexType=SimpleVertex>
     subbuffer: Subbuffer<[VertexType]>,
     indices: Subbuffer<[u16]>,
     #[cfg(debug_assertions)]
-    updated_buffers: Option<bool>
+    updated_buffers: Option<FrameParity>
 }
 
 impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> NormalGraphicalObject<VertexType> for SolidObject<VertexType>
@@ -126,21 +126,40 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])> + fmt::Debug> GameObject fo
 
         let layout = info.current_layout();
 
-        unsafe{
-            info.object_info.builder_wrapper.builder()
-                .bind_descriptor_sets(
-                    PipelineBindPoint::Graphics,
-                    layout,
-                    0,
-                    info.current_sets.clone()
-                )
-                .unwrap()
-                .bind_index_buffer(self.indices.clone())
-                .unwrap()
-                .bind_vertex_buffers(0, self.subbuffer.clone())
-                .unwrap()
-                .draw_indexed(size, 1, 0, 0, 0)
-                .unwrap();
+        #[cfg(debug_assertions)]
+        {
+            unsafe{
+                info.object_info.builder_wrapper.builder()
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        layout,
+                        0,
+                        info.current_sets.clone()
+                    )
+                    .unwrap()
+                    .bind_index_buffer(self.indices.clone())
+                    .unwrap()
+                    .bind_vertex_buffers(0, self.subbuffer.clone())
+                    .unwrap()
+                    .draw_indexed(size, 1, 0, 0, 0)
+                    .unwrap();
+            }
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{
+                info.object_info.builder_wrapper.builder()
+                    .bind_descriptor_sets_unchecked(
+                        PipelineBindPoint::Graphics,
+                        layout,
+                        0,
+                        info.current_sets.clone()
+                    )
+                    .bind_index_buffer_unchecked(self.indices.clone())
+                    .bind_vertex_buffers_unchecked(0, self.subbuffer.clone())
+                    .draw_indexed_unchecked(size, 1, 0, 0, 0);
+            }
         }
     }
 }

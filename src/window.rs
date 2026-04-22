@@ -31,7 +31,7 @@ use vulkano::{
             rasterization::{CullMode, RasterizationState},
             input_assembly::InputAssemblyState,
             vertex_input::{VertexInputState, VertexDefinition},
-            viewport::{Scissor, Viewport, ViewportState}
+            viewport::{Viewport, ViewportState}
         }
     },
     image::{
@@ -1034,11 +1034,29 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
     app_init: &mut Option<UserApp::AppInfo>
 ) -> bool
 {
-    let mut builder = match AutoCommandBufferBuilder::primary(
-        info.command_allocator.clone(),
-        info.queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit
-    )
+    let builder = {
+        #[cfg(debug_assertions)]
+        {
+            AutoCommandBufferBuilder::primary(
+                info.command_allocator.clone(),
+                info.queue.queue_family_index(),
+                CommandBufferUsage::OneTimeSubmit
+            )
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{
+                AutoCommandBufferBuilder::primary_unchecked(
+                    info.command_allocator.clone(),
+                    info.queue.queue_family_index(),
+                    CommandBufferUsage::OneTimeSubmit
+                )
+            }
+        }
+    };
+
+    let mut builder = match builder
     {
         Ok(x) => x,
         Err(err) =>
@@ -1077,12 +1095,6 @@ fn handle_redraw<UserApp: YanyaApp + 'static>(
         }
 
         info.window_resized = false;
-    }
-
-    if let Err(err) = builder.set_scissor(0, vec![Scissor::default()].into())
-    {
-        eprintln!("error setting default scissor: {err}");
-        return false;
     }
 
     let acquired =
@@ -1213,17 +1225,28 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
     }
 
     let framebuffer_info = &frame_info.render_info.framebuffers[frame_info.image_index];
-    frame_info.builder
-        .begin_render_pass(
-            RenderPassBeginInfo{
-                clear_values: (frame_info.render_info.clear_values)(user_app),
-                ..RenderPassBeginInfo::framebuffer(framebuffer_info.framebuffer.clone())
-            },
-            SubpassBeginInfo{
-                contents: SubpassContents::Inline,
-                ..Default::default()
-            }
-        )?;
+
+    {
+        let render_info = RenderPassBeginInfo{
+            clear_values: (frame_info.render_info.clear_values)(user_app),
+            ..RenderPassBeginInfo::framebuffer(framebuffer_info.framebuffer.clone())
+        };
+
+        let subpass_info = SubpassBeginInfo{
+            contents: SubpassContents::Inline,
+            ..Default::default()
+        };
+
+        #[cfg(debug_assertions)]
+        {
+            frame_info.builder.begin_render_pass(render_info, subpass_info)?;
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ frame_info.builder.begin_render_pass_unchecked(render_info, subpass_info); }
+        }
+    }
 
     {
         let object_create_info = frame_info.engine
@@ -1233,16 +1256,26 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
                 frame_info.frame_parity
             );
 
-        let draw_info = DrawInfo::new(
+        let mut draw_info = DrawInfo::new(
             object_create_info,
             &frame_info.render_info.pipelines,
             &framebuffer_info.attachments
         );
 
+        draw_info.reset_scissor();
+
         user_app.draw(draw_info);
     }
 
-    frame_info.builder.end_render_pass(Default::default())?;
+    #[cfg(debug_assertions)]
+    {
+        frame_info.builder.end_render_pass(Default::default())?;
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        unsafe{ frame_info.builder.end_render_pass_unchecked(Default::default()); }
+    }
 
     user_app.render_pass_ended(&mut frame_info.builder);
 

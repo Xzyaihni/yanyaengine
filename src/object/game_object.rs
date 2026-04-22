@@ -36,6 +36,15 @@ mod builder_wrapper;
 
 pub type CommandBuilderType = AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>;
 
+#[cfg(debug_assertions)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameParity
+{
+    Even = 0,
+    Odd = 1,
+    Ignore = 2
+}
+
 pub struct ObjectCreatePartialInfo<'a>
 {
     pub builder_wrapper: BuilderWrapper<'a>,
@@ -44,7 +53,7 @@ pub struct ObjectCreatePartialInfo<'a>
     pub uniform_allocator: Rc<UniformAllocator>,
     pub size: [f32; 2],
     #[cfg(debug_assertions)]
-    pub frame_parity: bool
+    pub frame_parity: FrameParity
 }
 
 impl<'a> ObjectCreatePartialInfo<'a>
@@ -127,9 +136,18 @@ impl<'a> DrawInfo<'a>
         self.current_pipeline = Some(shader.get_raw());
 
         let pipeline = self.current_pipeline().pipeline.clone();
-        self.object_info.builder_wrapper.builder().bind_pipeline_graphics(
-            pipeline
-        ).unwrap();
+
+        let builder = self.object_info.builder_wrapper.builder();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.bind_pipeline_graphics(pipeline).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.bind_pipeline_graphics_unchecked(pipeline); }
+        }
     }
 
     pub fn current_pipeline_id(&self) -> Option<ShaderId>
@@ -149,9 +167,17 @@ impl<'a> DrawInfo<'a>
 
     pub fn next_subpass(&mut self)
     {
-        self.object_info.builder_wrapper.builder()
-            .next_subpass(SubpassEndInfo::default(), SubpassBeginInfo::default())
-            .unwrap();
+        let builder = self.object_info.builder_wrapper.builder();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.next_subpass(SubpassEndInfo::default(), SubpassBeginInfo::default()).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.next_subpass_unchecked(SubpassEndInfo::default(), SubpassBeginInfo::default()); }
+        }
     }
 
     #[allow(dead_code)]
@@ -161,12 +187,18 @@ impl<'a> DrawInfo<'a>
     )
     {
         let layout = self.current_layout();
-        self.object_info.builder_wrapper.builder().push_constants(
-                layout,
-                0,
-                constants
-            )
-            .unwrap();
+
+        let builder = self.object_info.builder_wrapper.builder();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.push_constants(layout, 0, constants).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.push_constants_unchecked(layout, 0, constants); }
+        }
     }
 
     #[allow(dead_code)]
@@ -177,41 +209,70 @@ impl<'a> DrawInfo<'a>
     )
     {
         let layout = self.current_layout();
-        self.object_info.builder_wrapper.builder().push_descriptor_set(
-                PipelineBindPoint::Graphics,
-                layout,
-                location.set,
-                vec![WriteDescriptorSet::buffer(location.binding, buffer)].into()
-            )
-            .unwrap();
+
+        let builder = self.object_info.builder_wrapper.builder();
+
+        let descriptor_sets = vec![WriteDescriptorSet::buffer(location.binding, buffer)].into();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.push_descriptor_set(PipelineBindPoint::Graphics, layout, location.set, descriptor_sets).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.push_descriptor_set_unchecked(PipelineBindPoint::Graphics, layout, location.set, descriptor_sets); }
+        }
     }
 
     pub fn set_depth_test(&mut self, state: bool)
     {
-        self.object_info.builder_wrapper.builder()
-            .set_depth_test_enable(state)
-            .unwrap();
+        let builder = self.object_info.builder_wrapper.builder();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.set_depth_test_enable(state).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.set_depth_test_enable_unchecked(state); }
+        }
     }
 
     pub fn set_depth_write(&mut self, state: bool)
     {
-        self.object_info.builder_wrapper.builder()
-            .set_depth_write_enable(state)
-            .unwrap();
+        let builder = self.object_info.builder_wrapper.builder();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.set_depth_write_enable(state).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.set_depth_write_enable_unchecked(state); }
+        }
     }
 
     pub fn set_scissor(&mut self, scissor: Scissor)
     {
-        self.object_info.builder_wrapper.builder()
-            .set_scissor(0, vec![scissor].into())
-            .unwrap();
+        let builder = self.object_info.builder_wrapper.builder();
+
+        #[cfg(debug_assertions)]
+        {
+            builder.set_scissor(0, vec![scissor].into()).unwrap();
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe{ builder.set_scissor_unchecked(0, vec![scissor].into()); }
+        }
     }
 
     pub fn reset_scissor(&mut self)
     {
-        self.object_info.builder_wrapper.builder()
-            .set_scissor(0, vec![Scissor::default()].into())
-            .unwrap();
+        self.set_scissor(Scissor::default())
     }
 
     pub fn resource_uploader(&self) -> &ResourceUploader<'_>

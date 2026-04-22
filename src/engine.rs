@@ -92,7 +92,7 @@ impl Engine
             uniform_allocator: self.uniform_allocator.clone(),
             size,
             #[cfg(debug_assertions)]
-            frame_parity
+            frame_parity: if frame_parity { FrameParity::Even } else { FrameParity::Odd }
         }
     }
 
