@@ -12,6 +12,7 @@ use std::{
 };
 
 use vulkano::{
+    image::view::ImageView,
     buffer::subbuffer::BufferContents,
     swapchain::PresentMode,
     pipeline::{
@@ -158,7 +159,7 @@ where
 
     fn swap_pipelines(&mut self, _resource_uploader: &ResourceUploader) {}
 
-    fn render_pass_ended(&mut self, _builder: &mut CommandBuilderType) {}
+    fn render_pass_ended(&mut self, _attachments: &[Arc<ImageView>], _builder: &mut CommandBuilderType) {}
 }
 
 #[derive(Default)]

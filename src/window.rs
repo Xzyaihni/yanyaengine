@@ -1277,7 +1277,7 @@ fn run_frame<UserApp: YanyaApp, T: Clone>(
         unsafe{ frame_info.builder.end_render_pass_unchecked(Default::default()); }
     }
 
-    user_app.render_pass_ended(&mut frame_info.builder);
+    user_app.render_pass_ended(&framebuffer_info.attachments, &mut frame_info.builder);
 
     frame_info.builder.build()
 }
