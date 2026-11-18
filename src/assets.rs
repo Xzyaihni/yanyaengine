@@ -64,7 +64,7 @@ pub struct FilesLoader;
 
 impl FilesLoader
 {
-    pub fn load_images(folder_path: impl AsRef<Path>) -> impl Iterator<Item=NamedValue<RgbaImage>>
+    pub fn load_images<'a, P: AsRef<Path> + 'a>(folder_path: P) -> impl Iterator<Item=NamedValue<RgbaImage>> + use<'a, P>
     {
         Self::load(folder_path).filter_map(|named_value|
         {
@@ -85,7 +85,7 @@ impl FilesLoader
         })
     }
 
-    pub fn load(folder_path: impl AsRef<Path>) -> impl Iterator<Item=NamedValue<PathBuf>>
+    pub fn load<'a, P: AsRef<Path> + 'a>(folder_path: P) -> impl Iterator<Item=NamedValue<PathBuf>> + use<'a, P>
     {
         Self::recursive_dir(folder_path.as_ref()).map(move |name|
         {
@@ -99,7 +99,7 @@ impl FilesLoader
         })
     }
 
-    fn recursive_dir(path: &Path) -> impl Iterator<Item=PathBuf>
+    fn recursive_dir<'a>(path: &'a Path) -> impl Iterator<Item=PathBuf> + use<>
     {
         let mut collector = Vec::new();
 

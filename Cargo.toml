@@ -1,19 +1,19 @@
 [package]
 name = "yanyaengine"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bytemuck = "1.23.0"
 image = "0.25.6"
-nalgebra = { version = "0.34", features = ["serde-serialize"] }
-parking_lot = { version = "0.12.3", default-features = false }
+nalgebra = { version = "0.35", features = ["serde-serialize"] }
+parking_lot = { version = "0.13", default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
 strum = { version = "0.28", features = ["derive"] }
+ab_glyph = "0.2.29"
 vulkano = "0.35"
 vulkano-shaders = "0.35"
 winit = { version = "0.30.10", features = ["rwh_05", "serde"] }
 foldhash = "0.1"
-ab_glyph = "0.2.29"
