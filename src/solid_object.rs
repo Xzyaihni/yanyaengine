@@ -8,7 +8,7 @@ use std::{
 use parking_lot::RwLock;
 
 use vulkano::{
-    buffer::Subbuffer,
+    buffer::{Subbuffer, allocator::SubbufferAllocator},
     pipeline::{PipelineBindPoint, graphics::vertex_input::Vertex}
 };
 
@@ -18,7 +18,6 @@ use crate::{
     game_object::*,
     SimpleVertex,
     object::{impl_updated_check, NormalGraphicalObject, ObjectTransform, Model},
-    allocators::ObjectAllocator,
     transform::{Transform, OnTransformCallback, TransformContainer}
 };
 
@@ -54,16 +53,16 @@ impl<VertexType: Vertex + From<([f32; 4], [f32; 2])>> SolidObject<VertexType>
     pub fn new(
         model: Arc<RwLock<Model>>,
         transform: ObjectTransform,
-        vertex_allocator: &ObjectAllocator,
-        index_allocator: &ObjectAllocator
+        vertex_allocator: &SubbufferAllocator,
+        index_allocator: &SubbufferAllocator
     ) -> Self
     {
-        let subbuffer = vertex_allocator.subbuffer(model.read().vertices.len() as u64);
+        let subbuffer = vertex_allocator.allocate_slice(model.read().vertices.len() as u64).unwrap();
 
         let indices = {
             let model_indices = &model.read().indices;
 
-            let indices = index_allocator.subbuffer(model_indices.len() as u64);
+            let indices = index_allocator.allocate_slice(model_indices.len() as u64).unwrap();
             indices.write().unwrap().copy_from_slice(model_indices.as_slice());
 
             indices

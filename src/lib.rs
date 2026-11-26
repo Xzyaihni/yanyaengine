@@ -38,6 +38,7 @@ use game_object::*;
 pub use object::{
     Object,
     ObjectVertex,
+    UniformLocation,
     game_object,
     resource_uploader::ResourceUploader
 };
@@ -61,16 +62,12 @@ pub use transform::{
     OnTransformCallback
 };
 
-pub use allocators::UniformLocation;
-
 pub use object_factory::{ObjectFactory, ObjectInfo};
 pub use assets::*;
 
 pub use control::{KeyCodeNamed, Control};
 
 mod control;
-
-pub mod allocators;
 
 pub mod occluding_plane;
 pub mod object;
@@ -395,7 +392,20 @@ impl<UserApp: YanyaApp + 'static, T> AppBuilder<UserApp, T>
 
     pub fn with_icon<P: AsRef<Path>>(mut self, icon_path: P) -> Self
     {
-        let texture = image::open(icon_path).unwrap().into_rgba8();
+        let icon_path = icon_path.as_ref();
+
+        let image = match image::open(icon_path)
+        {
+            Ok(x) => x,
+            Err(err) =>
+            {
+                eprintln!("couldnt open icon image (at {}): {err}", icon_path.display());
+
+                return self;
+            }
+        };
+
+        let texture = image.into_rgba8();
         let (width, height) = (texture.width(), texture.height());
 
         let icon = Icon::from_rgba(texture.into_vec(), width, height).ok();

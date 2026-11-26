@@ -2,7 +2,7 @@
 use std::{fmt, cell::RefCell};
 
 use vulkano::{
-    buffer::Subbuffer,
+    buffer::{Subbuffer, allocator::SubbufferAllocator},
     pipeline::{PipelineBindPoint, graphics::vertex_input::{VertexBufferDescription, Vertex}}
 };
 
@@ -12,7 +12,6 @@ use crate::{
     game_object::*,
     SimpleVertex,
     object::{impl_updated_check, Model, ObjectTransform},
-    allocators::ObjectAllocator,
     transform::{Transform, OnTransformCallback, TransformContainer}
 };
 
@@ -46,17 +45,17 @@ impl<VertexType: Vertex + From<[f32; 4]> + fmt::Debug> OccludingPlane<VertexType
     pub fn new(
         transform: ObjectTransform,
         reverse_winding: bool,
-        vertex_allocator: &ObjectAllocator,
-        index_allocator: &ObjectAllocator
+        vertex_allocator: &SubbufferAllocator,
+        index_allocator: &SubbufferAllocator
     ) -> Self
     {
         let square = Model::square(1.0);
-        let subbuffer = vertex_allocator.subbuffer(square.vertices.len() as u64);
+        let subbuffer = vertex_allocator.allocate_slice(square.vertices.len() as u64).unwrap();
 
         let indices = {
             let model_indices = &square.indices;
 
-            let indices = index_allocator.subbuffer(model_indices.len() as u64);
+            let indices = index_allocator.allocate_slice(model_indices.len() as u64).unwrap();
             indices.write().unwrap().copy_from_slice(model_indices.as_slice());
 
             indices

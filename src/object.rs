@@ -9,7 +9,7 @@ use std::{
 use parking_lot::{RwLock, Mutex};
 
 use vulkano::{
-    buffer::{BufferContents, Subbuffer},
+    buffer::{BufferContents, Subbuffer, allocator::SubbufferAllocator},
     pipeline::{
         PipelineBindPoint,
         graphics::vertex_input::{VertexBufferDescription, Vertex}
@@ -18,11 +18,7 @@ use vulkano::{
 
 use nalgebra::{Vector3, Vector4, Matrix4};
 
-use crate::{
-    UniformLocation,
-    allocators::ObjectAllocator,
-    transform::{Transform, OnTransformCallback, TransformContainer}
-};
+use crate::transform::{Transform, OnTransformCallback, TransformContainer};
 
 pub use crate::impl_updated_check;
 
@@ -142,6 +138,13 @@ impl From<([f32; 4], [f32; 2])> for ObjectVertex
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UniformLocation
+{
+    pub set: u32,
+    pub binding: u32
+}
+
 pub struct Object
 {
     model: Arc<RwLock<Model>>,
@@ -160,16 +163,16 @@ impl Object
         model: Arc<RwLock<Model>>,
         texture: Arc<Mutex<Texture>>,
         transform: ObjectTransform,
-        vertex_allocator: &ObjectAllocator,
-        index_allocator: &ObjectAllocator
+        vertex_allocator: &SubbufferAllocator,
+        index_allocator: &SubbufferAllocator
     ) -> Self
     {
-        let subbuffer = vertex_allocator.subbuffer(model.read().vertices.len() as u64);
+        let subbuffer = vertex_allocator.allocate_slice(model.read().vertices.len() as u64).unwrap();
 
         let indices = {
             let model_indices = &model.read().indices;
 
-            let indices = index_allocator.subbuffer(model_indices.len() as u64);
+            let indices = index_allocator.allocate_slice(model_indices.len() as u64).unwrap();
             indices.write().unwrap().copy_from_slice(model_indices.as_slice());
 
             indices
@@ -271,12 +274,7 @@ impl GameObject for Object
         {
             unsafe{
                 info.object_info.builder_wrapper.builder()
-                    .bind_descriptor_sets(
-                        PipelineBindPoint::Graphics,
-                        layout,
-                        0,
-                        sets
-                    )
+                    .bind_descriptor_sets(PipelineBindPoint::Graphics, layout, 0, sets)
                     .unwrap()
                     .bind_index_buffer(self.indices.clone())
                     .unwrap()
@@ -291,12 +289,7 @@ impl GameObject for Object
         {
             unsafe{
                 info.object_info.builder_wrapper.builder()
-                    .bind_descriptor_sets_unchecked(
-                        PipelineBindPoint::Graphics,
-                        layout,
-                        0,
-                        sets
-                    )
+                    .bind_descriptor_sets_unchecked(PipelineBindPoint::Graphics, layout, 0, sets)
                     .bind_index_buffer_unchecked(self.indices.clone())
                     .bind_vertex_buffers_unchecked(0, self.subbuffer.clone())
                     .draw_indexed_unchecked(size, 1, 0, 0, 0);

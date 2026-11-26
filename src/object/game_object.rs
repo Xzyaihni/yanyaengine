@@ -13,7 +13,8 @@ use vulkano::{
     descriptor_set::{WriteDescriptorSet, DescriptorSet},
     buffer::{
         Subbuffer,
-        BufferContents
+        BufferContents,
+        allocator::SubbufferAllocator
     },
     command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer, SubpassEndInfo, SubpassBeginInfo}
 };
@@ -25,7 +26,6 @@ use crate::{
     ShaderId,
     PipelineInfo,
     ResourceUploader,
-    allocators::UniformAllocator,
     camera::Camera
 };
 
@@ -50,7 +50,7 @@ pub struct ObjectCreatePartialInfo<'a>
     pub builder_wrapper: BuilderWrapper<'a>,
     pub assets: Arc<Mutex<Assets>>,
     pub object_factory: Rc<ObjectFactory>,
-    pub uniform_allocator: Rc<UniformAllocator>,
+    pub uniform_allocator: Rc<SubbufferAllocator>,
     pub size: [f32; 2],
     #[cfg(debug_assertions)]
     pub frame_parity: FrameParity

@@ -2,17 +2,19 @@ use std::{fmt, sync::Arc};
 
 use parking_lot::{RwLock, Mutex};
 
-use vulkano::pipeline::graphics::vertex_input::Vertex;
+use vulkano::{
+    buffer::allocator::SubbufferAllocator,
+    pipeline::graphics::vertex_input::Vertex
+};
 
 use super::{
     OccludingPlane,
-    allocators::ObjectAllocator,
-	object::ObjectTransform,
-	object::{
-		Object,
-		model::Model,
-		texture::Texture
-	}
+    object::ObjectTransform,
+    object::{
+        Object,
+        model::Model,
+        texture::Texture
+    }
 };
 
 use crate::{
@@ -31,29 +33,29 @@ pub struct ObjectInfo
 #[derive(Debug)]
 pub struct ObjectFactory
 {
-	vertex_allocator: ObjectAllocator,
-    index_allocator: ObjectAllocator
+    vertex_allocator: SubbufferAllocator,
+    index_allocator: SubbufferAllocator
 }
 
 impl ObjectFactory
 {
-	pub fn new(vertex_allocator: ObjectAllocator, index_allocator: ObjectAllocator) -> Self
-	{
-		Self{vertex_allocator, index_allocator}
-	}
+    pub fn new(vertex_allocator: SubbufferAllocator, index_allocator: SubbufferAllocator) -> Self
+    {
+        Self{vertex_allocator, index_allocator}
+    }
 
-	pub fn create(&self, info: ObjectInfo) -> Object
-	{
-		let object_transform = ObjectTransform::new_transformed(info.transform);
+    pub fn create(&self, info: ObjectInfo) -> Object
+    {
+        let object_transform = ObjectTransform::new_transformed(info.transform);
 
-		Object::new(
-			info.model,
-			info.texture,
-			object_transform,
-			&self.vertex_allocator,
-			&self.index_allocator
-		)
-	}
+        Object::new(
+            info.model,
+            info.texture,
+            object_transform,
+            &self.vertex_allocator,
+            &self.index_allocator
+        )
+    }
 
     pub fn create_solid<VertexType: Vertex + From<([f32; 4], [f32; 2])>>(
         &self,
@@ -64,8 +66,8 @@ impl ObjectFactory
         SolidObject::new(
             model,
             ObjectTransform::new_transformed(transform),
-			&self.vertex_allocator,
-			&self.index_allocator
+            &self.vertex_allocator,
+            &self.index_allocator
         )
     }
 
@@ -75,13 +77,13 @@ impl ObjectFactory
         reverse_winding: bool
     ) -> OccludingPlane<VertexType>
     {
-		let object_transform = ObjectTransform::new_transformed(transform);
+        let object_transform = ObjectTransform::new_transformed(transform);
 
         OccludingPlane::new(
             object_transform,
             reverse_winding,
-			&self.vertex_allocator,
-			&self.index_allocator
+            &self.vertex_allocator,
+            &self.index_allocator
         )
     }
 }

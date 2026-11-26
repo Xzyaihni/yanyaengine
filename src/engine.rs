@@ -9,15 +9,17 @@ use parking_lot::Mutex;
 
 use vulkano::{
     device::Device,
-    buffer::BufferUsage,
-    memory::allocator::StandardMemoryAllocator
+    buffer::{
+        BufferUsage,
+        allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}
+    },
+    memory::allocator::{MemoryTypeFilter, StandardMemoryAllocator}
 };
 
 use crate::{
     ObjectFactory,
     AssetsPaths,
     Assets,
-    allocators::{UniformAllocator, ObjectAllocator},
     text_factory::FontsContainer,
     game_object::*,
     object::resource_uploader::ResourceUploader
@@ -28,7 +30,7 @@ pub struct Engine
 {
     fonts_info: Rc<FontsContainer>,
     object_factory: Rc<ObjectFactory>,
-    uniform_allocator: Rc<UniformAllocator>,
+    uniform_allocator: Rc<SubbufferAllocator>,
     assets: Arc<Mutex<Assets>>
 }
 
@@ -50,17 +52,35 @@ impl Engine
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device));
 
-        let vertex_allocator = ObjectAllocator::new(
+        let vertex_allocator = SubbufferAllocator::new(
             memory_allocator.clone(),
-            BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST
+            SubbufferAllocatorCreateInfo{
+                buffer_usage: BufferUsage::VERTEX_BUFFER | BufferUsage::TRANSFER_DST,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            }
         );
 
-        let index_allocator = ObjectAllocator::new(
+        let index_allocator = SubbufferAllocator::new(
             memory_allocator.clone(),
-            BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST
+            SubbufferAllocatorCreateInfo{
+                buffer_usage: BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            }
         );
 
-        let uniform_allocator = Rc::new(UniformAllocator::new(memory_allocator));
+        let uniform_allocator = Rc::new(SubbufferAllocator::new(
+            memory_allocator.clone(),
+            SubbufferAllocatorCreateInfo{
+                buffer_usage: BufferUsage::UNIFORM_BUFFER,
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            }
+        ));
 
         let object_factory = ObjectFactory::new(vertex_allocator, index_allocator);
         let object_factory = Rc::new(object_factory);
