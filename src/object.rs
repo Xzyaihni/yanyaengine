@@ -138,13 +138,6 @@ impl From<([f32; 4], [f32; 2])> for ObjectVertex
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct UniformLocation
-{
-    pub set: u32,
-    pub binding: u32
-}
-
 pub struct Object
 {
     model: Arc<RwLock<Model>>,
@@ -259,7 +252,7 @@ impl GameObject for Object
             return;
         }
 
-        let descriptor_set = self.texture.lock().descriptor_set(info, UniformLocation{set: info.current_sets.len() as u32, binding: 0});
+        let descriptor_set = self.texture.lock().descriptor_set(info, info.current_sets.len() as u32);
 
         self.assert_updated(&info.object_info);
 

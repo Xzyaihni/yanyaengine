@@ -22,7 +22,6 @@ use vulkano::{
 use crate::{
     Assets,
     ObjectFactory,
-    UniformLocation,
     ShaderId,
     PipelineInfo,
     ResourceUploader,
@@ -204,7 +203,7 @@ impl<'a> DrawInfo<'a>
     #[allow(dead_code)]
     pub fn push_uniform_buffer<T: BufferContents>(
         &mut self,
-        location: UniformLocation,
+        set: u32,
         buffer: Subbuffer<T>
     )
     {
@@ -212,16 +211,16 @@ impl<'a> DrawInfo<'a>
 
         let builder = self.object_info.builder_wrapper.builder();
 
-        let descriptor_sets = vec![WriteDescriptorSet::buffer(location.binding, buffer)].into();
+        let descriptor_sets = vec![WriteDescriptorSet::buffer(0, buffer)].into();
 
         #[cfg(debug_assertions)]
         {
-            builder.push_descriptor_set(PipelineBindPoint::Graphics, layout, location.set, descriptor_sets).unwrap();
+            builder.push_descriptor_set(PipelineBindPoint::Graphics, layout, set, descriptor_sets).unwrap();
         }
 
         #[cfg(not(debug_assertions))]
         {
-            unsafe{ builder.push_descriptor_set_unchecked(PipelineBindPoint::Graphics, layout, location.set, descriptor_sets); }
+            unsafe{ builder.push_descriptor_set_unchecked(PipelineBindPoint::Graphics, layout, set, descriptor_sets); }
         }
     }
 

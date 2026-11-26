@@ -35,7 +35,7 @@ use image::{
     error::ImageError
 };
 
-use crate::{game_object::*, UniformLocation, ShaderId};
+use crate::{game_object::*, ShaderId};
 use super::resource_uploader::ResourceUploader;
 
 
@@ -500,7 +500,7 @@ impl fmt::Debug for RgbaImage
     }
 }
 
-type SetId = (ShaderId, UniformLocation);
+type SetId = (ShaderId, u32);
 
 #[derive(Clone)]
 pub struct Texture
@@ -591,7 +591,7 @@ impl Texture
     pub fn descriptor_set(
         &mut self,
         info: &DrawInfo,
-        location: UniformLocation
+        set: u32
     ) -> Arc<DescriptorSet>
     {
         let current = (
@@ -599,18 +599,16 @@ impl Texture
             {
                 panic!("tried to get current pipeline without a pipeline bound")
             }),
-            location
+            set
         );
 
         self.descriptor_sets.entry(current).or_insert_with(||
         {
             let resource_uploader = info.object_info.builder_wrapper.resource_uploader();
             info.create_descriptor_set(
-                current.1.set as usize,
+                set as usize,
                 [
-                    WriteDescriptorSet::image_view_sampler(
-                        current.1.binding, self.view.clone(), resource_uploader.sampler.clone()
-                    )
+                    WriteDescriptorSet::image_view_sampler(0, self.view.clone(), resource_uploader.sampler.clone())
                 ]
             )
         }).clone()

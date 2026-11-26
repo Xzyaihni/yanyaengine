@@ -38,7 +38,6 @@ use game_object::*;
 pub use object::{
     Object,
     ObjectVertex,
-    UniformLocation,
     game_object,
     resource_uploader::ResourceUploader
 };
